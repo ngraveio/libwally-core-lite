@@ -508,6 +508,8 @@ int wally_scriptpubkey_p2pkh_from_bytes(
     return ret;
 }
 
+#if 0
+/* SECP256K1 exclude */
 int wally_scriptsig_p2pkh_from_sig(const unsigned char *pub_key, size_t pub_key_len,
                                    const unsigned char *sig, size_t sig_len,
                                    uint32_t sighash,
@@ -532,6 +534,7 @@ int wally_scriptsig_p2pkh_from_sig(const unsigned char *pub_key, size_t pub_key_
     }
     return ret;
 }
+#endif
 
 int wally_scriptsig_p2pkh_from_der(
     const unsigned char *pub_key, size_t pub_key_len,
@@ -663,6 +666,8 @@ done:
     return WALLY_OK;
 }
 
+#if 0
+/* SECP256K1 exclude */
 int wally_scriptsig_multisig_from_bytes(
     const unsigned char *script, size_t script_len,
     const unsigned char *bytes, size_t bytes_len,
@@ -728,6 +733,7 @@ cleanup:
     wally_clear(der_buff, sizeof(der_buff));
     return ret;
 }
+#endif
 
 int wally_scriptpubkey_csv_2of2_then_1_from_bytes(
     const unsigned char *bytes, size_t bytes_len, uint32_t csv_blocks,
@@ -1052,6 +1058,8 @@ int wally_elements_pegout_script_from_bytes(const unsigned char *genesis_blockha
     return WALLY_OK;
 }
 
+#if 0
+/* SECP256K1 exclude */
 int wally_elements_pegin_contract_script_from_bytes(const unsigned char *redeem_script,
                                                     size_t redeem_script_len,
                                                     const unsigned char *script,
@@ -1147,6 +1155,7 @@ int wally_elements_pegin_contract_script_from_bytes(const unsigned char *redeem_
     *written = redeem_script_len;
     return WALLY_OK;
 }
+#endif
 
 /* Converts a push only scriptsig to a newly allocated witness stack */
 static int scriptsig_to_witness(unsigned char *bytes, size_t bytes_len,
@@ -1209,6 +1218,8 @@ int wally_witness_p2wpkh_from_der(
     return ret;
 }
 
+#if 0
+/* SECP256K1 exclude */
 int wally_witness_p2wpkh_from_sig(
     const unsigned char *pub_key,
     size_t pub_key_len,
@@ -1234,6 +1245,7 @@ int wally_witness_p2wpkh_from_sig(
     }
     return ret;
 }
+#endif
 
 int wally_witness_p2tr_from_sig(const unsigned char *sig, size_t sig_len,
                                 struct wally_tx_witness_stack **witness)
@@ -1258,6 +1270,8 @@ int wally_witness_p2tr_from_sig(const unsigned char *sig, size_t sig_len,
     return ret;
 }
 
+#if 0
+/* SECP256K1 exclude */
 int wally_witness_multisig_from_bytes(
     const unsigned char *script,
     size_t script_len,
@@ -1298,3 +1312,4 @@ int wally_witness_multisig_from_bytes(
     clear_and_free(buff, buff_len);
     return ret;
 }
+#endif

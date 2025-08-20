@@ -466,6 +466,8 @@ int wally_psbt_input_clear_required_lockheight(struct wally_psbt_input *input)
     return WALLY_OK;
 }
 
+#if 0
+/* SECP256K1 exclude */
 /* Verify a DER encoded ECDSA sig plus sighash byte */
 static int der_sig_verify(const unsigned char *der, size_t der_len)
 {
@@ -474,19 +476,26 @@ static int der_sig_verify(const unsigned char *der, size_t der_len)
         return wally_ec_sig_from_der(der, der_len - 1, sig, sizeof(sig));
     return WALLY_EINVAL;
 }
+#endif
 
 static int pubkey_sig_verify(const unsigned char *key, size_t key_len,
                              const unsigned char *val, size_t val_len)
 {
+#if 0
+/* SECP256K1 exclude */
     int ret = wally_ec_public_key_verify(key, key_len);
     if (ret == WALLY_OK)
         ret = der_sig_verify(val, val_len);
     return ret;
+#endif
+    return WALLY_ERROR;
 }
 
 static int map_leaf_hashes_verify(const unsigned char *key, size_t key_len,
                                   const unsigned char *val, size_t val_len)
 {
+#if 0
+/* SECP256K1 exclude */
     int ret = wally_ec_xonly_public_key_verify(key, key_len);
     if (ret == WALLY_OK) {
         if (BYTES_INVALID(val, val_len) || (val_len && val_len % SHA256_LEN) ||
@@ -494,6 +503,8 @@ static int map_leaf_hashes_verify(const unsigned char *key, size_t key_len,
             ret = WALLY_EINVAL;
     }
     return ret;
+#endif
+    return WALLY_ERROR;
 }
 
 static int psbt_input_field_verify(uint32_t field_type,
@@ -1096,10 +1107,16 @@ static int wally_psbt_init(uint32_t version, size_t num_inputs, size_t num_outpu
         return WALLY_EINVAL;
 #endif /* BUILD_ELEMENTS */
 
-    if (num_inputs)
+    if (num_inputs) {
+        if (num_inputs > TX_MAX_INPUTS_ALLOC)
+            num_inputs = TX_MAX_INPUTS_ALLOC;
         psbt_out->inputs = wally_calloc(num_inputs * sizeof(struct wally_psbt_input));
-    if (num_outputs)
+    }
+    if (num_outputs) {
+        if (num_outputs > TX_MAX_OUTPUTS_ALLOC)
+            num_outputs = TX_MAX_OUTPUTS_ALLOC;
         psbt_out->outputs = wally_calloc(num_outputs * sizeof(struct wally_psbt_output));
+    }
 
     ret = wally_map_init(num_unknowns, NULL, &psbt_out->unknowns);
     if (ret == WALLY_OK)
@@ -3986,6 +4003,8 @@ int wally_psbt_clone_alloc(const struct wally_psbt *psbt, uint32_t flags,
     return ret;
 }
 
+#if 0
+/* SECP256K1 exclude */
 int wally_psbt_get_input_bip32_key_from_alloc(const struct wally_psbt *psbt,
                                               size_t index, size_t subindex,
                                               uint32_t flags,
@@ -4019,6 +4038,7 @@ int wally_psbt_get_input_bip32_key_from_alloc(const struct wally_psbt *psbt,
     }
     return ret;
 }
+#endif
 
 static bool is_matching_redeem(const unsigned char *scriptpk, size_t scriptpk_len,
                                const unsigned char *redeem, size_t redeem_len)
@@ -4309,6 +4329,8 @@ int wally_psbt_get_input_signature_hash(struct wally_psbt *psbt, size_t index,
     return ret;
 }
 
+#if 0
+/* SECP256K1 exclude */
 int wally_psbt_sign_input_bip32(struct wally_psbt *psbt,
                                 size_t index, size_t subindex,
                                 const unsigned char *txhash, size_t txhash_len,
@@ -4469,6 +4491,7 @@ int wally_psbt_sign(struct wally_psbt *psbt,
     wally_clear(&hdkey, sizeof(hdkey));
     return ret;
 }
+#endif
 
 static const struct wally_map_item *get_sig(const struct wally_psbt_input *input,
                                             size_t i, size_t n)
@@ -4540,6 +4563,8 @@ static bool finalize_multisig(struct wally_psbt_input *input,
                               const unsigned char *out_script, size_t out_script_len,
                               bool is_witness, bool is_p2sh)
 {
+#if 0
+/* SECP256K1 exclude */
     unsigned char sigs[EC_SIGNATURE_LEN * 15];
     uint32_t sighashes[15];
     const unsigned char *p = out_script, *end = p + out_script_len;
@@ -4618,6 +4643,8 @@ static bool finalize_multisig(struct wally_psbt_input *input,
 fail:
     wally_clear_2(sigs, sizeof(sigs), sighashes, sizeof(sighashes));
     return ret;
+#endif
+    return WALLY_ERROR;
 }
 
 static bool finalize_p2tr(struct wally_psbt_input *input)
@@ -4819,6 +4846,8 @@ static int compute_final_vbf(struct wally_psbt *psbt,
 }
 #endif /* BUILD_ELEMENTS */
 
+#if 0
+/* SECP256K1 exclude */
 int wally_psbt_blind(struct wally_psbt *psbt,
                      const struct wally_map *values,
                      const struct wally_map *vbfs,
@@ -5128,6 +5157,7 @@ int wally_psbt_blind_alloc(struct wally_psbt *psbt,
     }
     return ret;
 }
+#endif
 
 int wally_psbt_is_elements(const struct wally_psbt *psbt, size_t *written)
 {

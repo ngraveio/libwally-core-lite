@@ -103,6 +103,8 @@ int wally_wif_is_uncompressed(const char *wif,
     return ret;
 }
 
+#if 0
+/* SECP256K1 exclude */
 int wally_wif_to_public_key(const char *wif,
                             uint32_t prefix,
                             unsigned char *bytes_out,
@@ -174,3 +176,4 @@ int wally_wif_to_address(const char *wif,
     wally_clear_2(pubkey, sizeof(pubkey), address, sizeof(address));
     return ret;
 }
+#endif

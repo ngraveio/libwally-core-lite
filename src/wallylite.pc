@@ -1,0 +1,11 @@
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libwallycore-lite
+Description: Slim wally core (no signing/seed and only cpp)  
+URL: https://github.com/ngraveio/libwally-core
+Version: 0.9.0
+Cflags: -I${includedir}
+Libs: -L${libdir} -lwallylite

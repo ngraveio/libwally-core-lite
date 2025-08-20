@@ -432,6 +432,8 @@ static bool map_contains_key_length(const struct wally_map *map_in,
 /*
  * BIP32 keypath helpers.
  */
+#if 0
+/* SECP256K1 exclude */
 int wally_map_find_bip32_public_key_from(const struct wally_map *map_in, size_t index,
                                          const struct ext_key *hdkey, size_t *written)
 {
@@ -526,6 +528,8 @@ int wally_map_keypath_get_bip32_key_from_alloc(const struct wally_map *map_in,
     wally_clear(&derived, sizeof(derived));
     return ret;
 }
+#endif
+
 
 /*
  * PSBT keypath support.
@@ -537,6 +541,8 @@ static int keypath_key_verify(const unsigned char *key, size_t key_len, struct e
 {
     int ret = WALLY_EINVAL;
 
+#if 0
+/* SECP256K1 exclude */
     key_out->version = 0; /* If non-0 on return, we have a bip32 key */
 
     if (!key)
@@ -559,6 +565,7 @@ static int keypath_key_verify(const unsigned char *key, size_t key_len, struct e
             ret = WALLY_EINVAL; /* Must be a public key, not private */
         }
     }
+#endif
     return ret;
 }
 

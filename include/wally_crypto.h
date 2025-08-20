@@ -7,6 +7,7 @@
 extern "C" {
 #endif
 
+#if 0 // Unsupported in wally-lite version
 /**
  * Derive a pseudorandom key from inputs using an expensive application
  * of HMAC SHA-256.
@@ -91,7 +92,7 @@ WALLY_CORE_API int wally_aes_cbc(
     unsigned char *bytes_out,
     size_t len,
     size_t *written);
-
+#endif 
 
 /** Output length for `wally_sha256` */
 #define SHA256_LEN 32
@@ -382,6 +383,7 @@ WALLY_CORE_API int wally_ec_public_key_from_private_key(
     unsigned char *bytes_out,
     size_t len);
 
+#if 0 // Unsupported in wally-lite version
 /**
  * Create an uncompressed public key from a compressed public key.
  *
@@ -395,6 +397,7 @@ WALLY_CORE_API int wally_ec_public_key_decompress(
     size_t pub_key_len,
     unsigned char *bytes_out,
     size_t len);
+#endif
 
 /**
  * Negate a public key.
