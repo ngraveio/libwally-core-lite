@@ -285,10 +285,14 @@ static bool key_is_private(const struct ext_key *hdkey)
 /* Compute a public key from a private key */
 static int key_compute_pub_key(struct ext_key *key_out)
 {
+#if 0
+/* SECP256K1 exclude */
     return wally_ec_public_key_from_private_key(key_out->priv_key + 1,
                                                 EC_PRIVATE_KEY_LEN,
                                                 key_out->pub_key,
                                                 sizeof(key_out->pub_key));
+#endif
+    return WALLY_ERROR;
 }
 
 static void key_compute_hash160(struct ext_key *key_out)
@@ -322,6 +326,8 @@ static int wipe_key_fail(struct ext_key *key_out)
     return WALLY_EINVAL;
 }
 
+#if 0
+/* SECP256K1 exclude */
 int bip32_key_from_private_key(uint32_t version,
                                const unsigned char *priv_key, size_t priv_key_len,
                                struct ext_key *key_out)
@@ -354,12 +360,15 @@ int bip32_key_from_private_key(uint32_t version,
     /* Returned key is partial; it must be further initialized for deriving */
     return WALLY_OK;
 }
+#endif
 
 int bip32_key_from_seed_custom(const unsigned char *bytes, size_t bytes_len,
                                uint32_t version,
                                const unsigned char *hmac_key, size_t hmac_key_len,
                                uint32_t flags, struct ext_key *key_out)
 {
+#if 0
+/* SECP256K1 exclude */
     struct sha512 sha;
     int ret;
 
@@ -390,6 +399,8 @@ int bip32_key_from_seed_custom(const unsigned char *bytes, size_t bytes_len,
     }
     wally_clear(&sha, sizeof(sha));
     return ret;
+#endif
+    return WALLY_ERROR;
 }
 
 int bip32_key_from_seed(const unsigned char *bytes, size_t bytes_len,
@@ -620,6 +631,8 @@ static int bip32_seckey_tweak_add(const unsigned char *tweak, size_t tweak_len,
 int bip32_key_from_parent(const struct ext_key *hdkey, uint32_t child_num,
                           uint32_t flags, struct ext_key *key_out)
 {
+#if 0
+/* SECP256K1 exclude */
     struct sha512 sha;
     const secp256k1_context *ctx;
     const bool we_are_private = hdkey && key_is_private(hdkey);
@@ -745,9 +758,12 @@ int bip32_key_from_parent(const struct ext_key *hdkey, uint32_t child_num,
         key_compute_hash160(key_out);
     }
     wally_clear(&sha, sizeof(sha));
-    return WALLY_OK;
+#endif
+    return WALLY_ERROR;
 }
 
+#if 0
+/* SECP256K1 exclude */
 int bip32_key_from_parent_alloc(const struct ext_key *hdkey,
                                 uint32_t child_num, uint32_t flags,
                                 struct ext_key **output)
@@ -762,6 +778,7 @@ int bip32_key_from_parent_alloc(const struct ext_key *hdkey,
     }
     return ret;
 }
+#endif
 
 int bip32_key_from_parent_path(const struct ext_key *hdkey,
                                const uint32_t *child_path, size_t child_path_len,

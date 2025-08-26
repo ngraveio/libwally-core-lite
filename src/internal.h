@@ -2,11 +2,14 @@
 #define LIBWALLY_INTERNAL_H
 
 #include <include/wally_core.h>
+#if 0
+/* SECP256K1 exclude */
 #include "secp256k1/include/secp256k1.h"
 #include "secp256k1/include/secp256k1_recovery.h"
 #include "secp256k1/include/secp256k1_extrakeys.h"
 #ifndef BUILD_STANDARD_SECP
 #include "secp256k1/include/secp256k1_ecdsa_s2c.h"
+#endif
 #endif
 #include <config.h>
 #if defined(HAVE_MEMSET_S)
@@ -15,6 +18,8 @@
 #include <stdbool.h>
 #include <string.h>
 
+#if 0
+/* SECP256K1 exclude */
 /* Fetch an internal secp context */
 const secp256k1_context *secp_ctx(void);
 #define secp256k1_context_destroy(c) _do_not_destroy_shared_ctx_pointers(c)
@@ -31,10 +36,13 @@ int pubkey_serialize(unsigned char *output, size_t *outputlen, const secp256k1_p
 int xpubkey_parse(secp256k1_xonly_pubkey *pubkey, const unsigned char *input, size_t input_len);
 int xpubkey_tweak_add(secp256k1_pubkey *pubkey, const secp256k1_xonly_pubkey *xpubkey, const unsigned char *tweak);
 int xpubkey_serialize(unsigned char *output, const secp256k1_xonly_pubkey *xpubkey);
+#endif
 int seckey_verify(const unsigned char *seckey);
 int seckey_negate(unsigned char *seckey);
 int seckey_tweak_add(unsigned char *seckey, const unsigned char *tweak);
 int seckey_tweak_mul(unsigned char *seckey, const unsigned char *tweak);
+#if 0
+/* SECP256K1 exclude */
 int keypair_create(secp256k1_keypair *keypair, const unsigned char *priv_key);
 int keypair_xonly_pub(secp256k1_xonly_pubkey *xpubkey, const secp256k1_keypair *keypair);
 int keypair_sec(unsigned char *output, const secp256k1_keypair *keypair);
@@ -43,6 +51,7 @@ int keypair_xonly_tweak_add(secp256k1_keypair *keypair, const unsigned char *twe
 #define PUBKEY_COMPRESSED   SECP256K1_EC_COMPRESSED
 #define PUBKEY_UNCOMPRESSED SECP256K1_EC_UNCOMPRESSED
 
+#endif
 
 void wally_clear(void *p, size_t len);
 void wally_clear_2(void *p, size_t len, void *p2, size_t len2);
@@ -111,4 +120,13 @@ int map_add_preimage_and_hash(struct wally_map *map_in,
 const struct wally_map_item *map_find_equal_integer(const struct wally_map *lhs,
                                                     const struct wally_map *rhs,
                                                     uint32_t key);
+
+/* Clamp input/output allocation sizing to standard tx sizes for BTC.
+ * Liquid numbers are smaller; we use the upper limit */
+#define TX_MAX_INPUTS_ALLOC 1738u
+#define TX_MAX_OUTPUTS_ALLOC 3224u
+
+/* Clamp initial witness stack allocation sizing */
+#define MAX_WITNESS_ITEMS_ALLOC 100u /* Non-Taproot standardness limit */
+
 #endif /* LIBWALLY_INTERNAL_H */

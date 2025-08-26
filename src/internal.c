@@ -15,6 +15,8 @@
 #undef WIN32_LEAN_AND_MEAN
 #endif
 
+#if 0
+/* SECP256K1 exclude */
 /* Caller is responsible for thread safety */
 static secp256k1_context *global_ctx = NULL;
 
@@ -129,6 +131,7 @@ int wally_secp_randomize(const unsigned char *bytes, size_t bytes_len)
 
     return WALLY_OK;
 }
+#endif
 
 int wally_free_string(char *str)
 {
@@ -328,12 +331,12 @@ static void wally_internal_bzero(void *dest, size_t len)
     explicit_memset(dest, 0, len);
 #else
     memset(dest, 0, len);
+#endif
 #if defined(HAVE_INLINE_ASM)
     /* This is used by boringssl to prevent memset from being elided. It
      * works by forcing a memory barrier and so can be slow.
      */
     __asm__ __volatile__ ("" : : "r" (dest) : "memory");
-#endif
 #endif
 }
 
@@ -348,6 +351,8 @@ static void wally_internal_free(void *ptr)
         free(ptr);
 }
 
+#if 0
+/* SECP256K1 exclude */
 static int wally_internal_ec_nonce_fn(unsigned char *nonce32,
                                       const unsigned char *msg32, const unsigned char *key32,
                                       const unsigned char *algo16, void *data, unsigned int attempt)
@@ -370,24 +375,34 @@ struct secp256k1_context_struct *wally_internal_secp_context(void)
 
     return global_ctx;
 }
+#endif
 
 static struct wally_operations _ops = {
     sizeof(struct wally_operations),
     wally_internal_malloc,
     wally_internal_free,
     wally_internal_bzero,
+#if 0
+/* SECP256K1 exclude */
     wally_internal_ec_nonce_fn,
     wally_internal_secp_context,
+#else
+    NULL,
+    NULL,
+#endif
     NULL,
     NULL,
     NULL,
     NULL
 };
 
+#if 0
+/* SECP256K1 exclude */
 const secp256k1_context *secp_ctx(void)
 {
     return (const secp256k1_context *)_ops.secp_context_fn();
 }
+#endif
 
 void *wally_malloc(size_t size)
 {
@@ -534,19 +549,25 @@ int wally_cleanup(uint32_t flags)
 {
     if (flags)
         return WALLY_EINVAL;
+#if 0
+/* SECP256K1 exclude */
     if (global_ctx) {
         wally_secp_context_free(global_ctx);
         global_ctx = NULL;
     }
+#endif
     return WALLY_OK;
 }
 
+#if 0
+/* SECP256K1 exclude */
 void wally_secp_context_free(struct secp256k1_context_struct *ctx)
 {
 #undef secp256k1_context_destroy
     if (ctx)
         secp256k1_context_destroy(ctx);
 }
+#endif
 
 bool clone_data(void **dst, const void *src, size_t len)
 {

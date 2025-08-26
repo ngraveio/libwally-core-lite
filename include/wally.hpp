@@ -5,11 +5,8 @@
 #include <type_traits>
 #include <string>
 #include <wally_address.h>
-#include <wally_anti_exfil.h>
 #include <wally_bip32.h>
-#include <wally_bip38.h>
 #include <wally_bip39.h>
-#include <wally_bip85.h>
 #include <wally_core.h>
 #include <wally_crypto.h>
 #include <wally_descriptor.h>
@@ -18,9 +15,6 @@
 #include <wally_script.h>
 #include <wally_symmetric.h>
 #include <wally_transaction.h>
-#ifdef BUILD_ELEMENTS
-#include <wally_elements.h>
-#endif
 
 /* These wrappers allow passing containers such as std::vector, std::array,
  * std::string and custom classes as input/output buffers to wally functions.
@@ -577,11 +571,13 @@ inline int ec_public_key_bip341_tweak(const PUB_KEY& pub_key, const MERKLE_ROOT&
     return ret;
 }
 
+#if 0 // Unsupported in wally-lite version
 template <class PUB_KEY, class BYTES_OUT>
 inline int ec_public_key_decompress(const PUB_KEY& pub_key, BYTES_OUT& bytes_out) {
     int ret = ::wally_ec_public_key_decompress(pub_key.data(), pub_key.size(), bytes_out.data(), bytes_out.size());
     return ret;
 }
+#endif
 
 template <class PRIV_KEY, class BYTES_OUT>
 inline int ec_public_key_from_private_key(const PRIV_KEY& priv_key, BYTES_OUT& bytes_out) {

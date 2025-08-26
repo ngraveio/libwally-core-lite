@@ -1,8 +1,7 @@
 AC_PREREQ([2.60])
-AC_INIT([libwallycore],[0.9.0])
+AC_INIT([libwallycore-lite],[0.9.0])
 AC_CONFIG_AUX_DIR([tools/build-aux])
 AC_CONFIG_MACRO_DIR([tools/build-aux/m4])
-AC_CONFIG_SRCDIR([src/mnemonic.h])
 AC_CONFIG_HEADERS([src/config.h])
 AC_CANONICAL_HOST
 AH_TOP([#ifndef LIBWALLYCORE_CONFIG_H
@@ -67,9 +66,6 @@ AC_ARG_ENABLE(tests,
 AC_ARG_ENABLE(elements,
     AS_HELP_STRING([--enable-elements],[enable elements tx code (default: no)]),
     [elements=$enableval], [elements=no])
-AC_ARG_ENABLE(standard-secp,
-    AS_HELP_STRING([--enable-standard-secp],[enable compiling with standard libsecp256k1 (default: no)]),
-    [standard_secp=$enableval], [standard_secp=no])
 AC_ARG_ENABLE(builtin-memset,
     AS_HELP_STRING([--enable-builtin-memset],[disable to add -fno-builtin-memset to compiler flags. helps with explicit_bzero/memset being elided on Linux clang 7.0.1 and up (default: yes)]),
     [builtin_memset=$enableval], [builtin_memset=yes])
@@ -79,9 +75,6 @@ AC_ARG_ENABLE(minimal,
 AC_ARG_ENABLE(mbed-tls,
     AS_HELP_STRING([--enable-mbed-tls],[enable minimal size/memory footprint build (default: no)]),
     [mbedtls=$enableval], [mbedtls=no])
-AC_ARG_ENABLE(secp256k1-tests,
-    AS_HELP_STRING([--enable-secp256k1-tests],[enable secp256k1 tests (default: no)]),
-    [secp256k1_tests=$enableval], [secp256k1_tests=no])
 AC_ARG_ENABLE(asm,
     AS_HELP_STRING([--enable-asm],[enable assembly language implementations (default: yes)]),
     [asm=$enableval], [asm=yes])
@@ -127,12 +120,6 @@ fi
 
 if test "x$elements" == "xyes"; then
     AX_CHECK_COMPILE_FLAG([-DBUILD_ELEMENTS=1], [AM_CFLAGS="$AM_CFLAGS -DBUILD_ELEMENTS=1"])
-fi
-if test "x$standard_secp" == "xyes"; then
-    if test "x$elements" == "xyes"; then
-        AC_MSG_FAILURE([ERROR: Elements cannot be enabled with standard libsecp256k1])
-    fi
-    AX_CHECK_COMPILE_FLAG([-DBUILD_STANDARD_SECP=1], [AM_CFLAGS="$AM_CFLAGS -DBUILD_STANDARD_SECP=1"])
 fi
 
 if test "x$minimal" == "xyes"; then
@@ -245,153 +232,16 @@ if test "x$ac_have_pthread" == "xyes"; then
     AC_CHECK_HEADERS([asm/page.h])
 fi
 
-#
-# libsecp256k1
-#
-# FIXME: This is needed to force libtool to use all object files from secp.
-#        We can only build secp properly by recursively invoking
-#        configure/make, and can't include it as a noinst_ library. Libtool
-#        assumes that such libraries will be installed along with our library
-#        target and so won't force all object files in the library to be
-#        included in ours - despite the fact that we are making a shared
-#        library and linking to a static one. This is broken and we work
-#        around it by hacking the secp objects directly into the library
-#        via the _LDADD variable for wallycore.
-#        We previously achieved this by adding the libsecp256k1.a archive,
-#        but changes to libtool and apples linkers mean that
-#        archives-within-archives no longer work.
-#        Because automake tries to police its users very strictly and fails
-#        hard when flags are passed in this way, we have to substitute the
-#        flags here.
-#        Because libtool both intercepts -Wl and arbitrarily re-orders its
-#        command line inputs, we have to concoct a single expression to
-#        enforce linking that cannot be split, hence the below expression.
-LIBADD_SECP256K1="-Wl,secp256k1/src/libsecp256k1_la-secp256k1.${OBJEXT},secp256k1/src/libsecp256k1_precomputed_la-precomputed_ecmult_gen.${OBJEXT},secp256k1/src/libsecp256k1_precomputed_la-precomputed_ecmult.${OBJEXT}"
-AC_SUBST([LIBADD_SECP256K1])
-
-#
-# Python facilities
-#
-AC_ARG_ENABLE(python-manylinux,
-    AS_HELP_STRING([--enable-python-manylinux],[enable manylinux Python compatibility (default: no)]),
-    [python_manylinux=$enableval], [python_manylinux=no])
-AM_CONDITIONAL([PYTHON_MANYLINUX], [test "x$python_manylinux" == "xyes"])
-
-AX_PYTHON_DEVEL([>= '2.7.0'])
-AM_CONDITIONAL([HAVE_PYTHON], [test "$PYTHON" != ""])
-
-
-AC_ARG_ENABLE(wasm-interface,
-    AS_HELP_STRING([--enable-wasm-interface],[enable the WASM interface (default: no)]),
-    [wasm_interface=$enableval], [wasm_interface=no])
-
-if test "x$wasm_interface" == "xyes"; then
-    AX_CHECK_COMPILE_FLAG([-DWASM_BUILD=1], [AM_CFLAGS="$AM_CFLAGS -DWASM_BUILD=1"])
-fi
-
-#
-# SWIG
-#
-AC_PROG_SWIG
-
-AC_ARG_ENABLE(swig-python,
-    AS_HELP_STRING([--enable-swig-python],[enable the SWIG Python interface (default: no)]),
-    [swig_python=$enableval], [swig_python=no])
-AM_CONDITIONAL([USE_SWIG_PYTHON], [test "x$swig_python" == "xyes"])
-
-AM_CONDITIONAL([RUN_PYTHON_TESTS], [test "$PYTHON" != "" -a "x$pythonexists" == "xyes"])
-
-if test "x$swig_python" == "xyes"; then
-    if test "x$pythonexists" != "xyes"; then
-        AC_MSG_FAILURE([ERROR: No usable Python was found for swig-python])
-    fi
-    SWIG_PYTHON
-    AX_CHECK_COMPILE_FLAG([-DSWIG_PYTHON_BUILD=1], [AM_CFLAGS="$AM_CFLAGS -DSWIG_PYTHON_BUILD=1"])
-fi
-
-AC_ARG_ENABLE(swig-java,
-    AS_HELP_STRING([--enable-swig-java],[enable the SWIG java (JNI) interface (default: no)]),
-    [swig_java=$enableval], [swig_java=no])
-AM_CONDITIONAL([USE_SWIG_JAVA], [test "x$swig_java" == "xyes"])
-
-if test "x$swig_java" == "xyes"; then
-    saved_JAVA_HOME=$JAVA_HOME
-    if test x"$cross_compiling" = "xyes"; then
-        # For cross compiling we assume the users host O/S Java install is not
-        # usable and that they have provided suitable FLAGS/LDFLAGS
-        JAVA_HOME=/does_not_exist
-    fi
-    export JAVA_HOME
-    AX_JNI_INCLUDE_DIR
-    export JAVA_HOME=$saved_JAVA_HOME
-    for JNI_DIR in $JNI_INCLUDE_DIRS; do
-        SWIG_JAVA_CPPFLAGS="$SWIG_JAVA_CPPFLAGS -I$JNI_DIR"
-    done
-    SWIG_JAVA_OPT="-java"
-    AC_SUBST([SWIG_JAVA_CPPFLAGS])
-    AC_SUBST([SWIG_JAVA_OPT])
-    AX_CHECK_COMPILE_FLAG([-DSWIG_JAVA_BUILD=1], [AM_CFLAGS="$AM_CFLAGS -DSWIG_JAVA_BUILD=1"])
-fi
-
-if test "x$JAVA_HOME" != "x"; then
-    JAVA="$JAVA_HOME/bin/java"
-    AC_SUBST([JAVA])
-    JAVAC="$JAVA_HOME/bin/javac"
-    AC_SUBST([JAVAC])
-    JAR="$JAVA_HOME/bin/jar"
-    AC_SUBST([JAR])
-else
-    AC_CHECK_PROGS(JAVA, [java])
-    AC_CHECK_PROGS(JAVAC, [javac])
-    AC_CHECK_PROGS(JAR, [jar])
-fi
-AM_CONDITIONAL([HAVE_JAVA], [test "x$JAVA" != "x"])
-AM_CONDITIONAL([HAVE_JAVAC], [test "x$JAVAC" != "x"])
-if test "x$swig_java" == "xyes"; then
-    if test "x$JAVAC" != "x"; then
-        if test "x$JAVA" != "x"; then
-            # Only run tests if we have java-swig, compiler and interpreter
-            run_java_tests="yes"
-        fi
-    fi
-fi
-AM_CONDITIONAL([RUN_JAVA_TESTS], [test "x$run_java_tests" != "x"])
-JAVAC_TARGET=1.7
-AC_SUBST([JAVAC_TARGET])
-
 AC_SUBST([AM_CFLAGS])
-
-if test "x$enable_static" == "xyes"; then
-    CTEST_EXTRA_STATIC='$(libwallycore_la_LIBADD)'
-fi
-AC_SUBST([CTEST_EXTRA_STATIC])
 
 AM_CONDITIONAL([SHARED_BUILD_ENABLED], [test "x$enable_shared" == "xyes"])
 
 AC_CONFIG_FILES([
  Makefile
  src/Makefile
- src/wallycore.pc
+ src/wallylite.pc
 ])
 
-secp_asm="--with-asm=auto"
-if test "x$asm" == "xno"; then
-    secp_asm="--with-asm=no"
-fi
-if test "x$debug" == "xyes"; then
-    secp_asm="--with-asm=no"
-fi
-
-secp256k1_test_opt="--disable-tests"
-if test "x$secp256k1_tests" == "xyes"; then
-    secp256k1_test_opt="--enable-tests"
-fi
-
-if test x"$cross_compiling" = "xyes"; then
-    # For cross compiling we assume the users host O/S Java install is not
-    # usable and that they have provided suitable FLAGS/LDFLAGS
-    export JAVA_HOME=/does_not_exist
-fi
 export CC
 export CFLAGS
 export AR
@@ -399,8 +249,6 @@ export ARFLAGS
 export AR_FLAGS
 export LD
 export LDFLAGS
-ac_configure_args="${ac_configure_args} --disable-shared --with-pic --with-bignum=no --enable-experimental --enable-module-ecdh --enable-module-recovery --enable-module-ecdsa-s2c --enable-module-rangeproof --enable-module-surjectionproof --enable-module-whitelist --enable-module-generator --enable-module-extrakeys --enable-module-schnorrsig ${secp256k1_test_opt} --enable-openssl-tests=no --enable-exhaustive-tests=no --enable-benchmark=no --disable-dependency-tracking ${secp_asm}"
-AC_CONFIG_SUBDIRS([src/secp256k1])
-
+ac_configure_args="${ac_configure_args} --disable-shared --with-pic --with-bignum=no --enable-experimental --enable-module-ecdh --enable-module-recovery --enable-module-ecdsa-s2c --enable-module-rangeproof --enable-module-surjectionproof --enable-module-whitelist --enable-module-generator --enable-module-extrakeys --enable-module-schnorrsig --enable-openssl-tests=no --enable-exhaustive-tests=no --enable-benchmark=no --disable-dependency-tracking ${secp_asm}"
 
 AC_OUTPUT
