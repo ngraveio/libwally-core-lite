@@ -34,7 +34,7 @@ m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AC_PROG_CC
 AM_PROG_AR
 #saved_cflags="$CFLAGS"
-LT_INIT([disable-static])
+LT_INIT([enable-static, enable-shared])
 #CFLAGS="$saved_cflags"
 
 AC_SUBST([AR])
