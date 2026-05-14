@@ -15,34 +15,22 @@
 #undef WIN32_LEAN_AND_MEAN
 #endif
 
-#if 0
-/* SECP256K1 exclude */
-/* Caller is responsible for thread safety */
-static secp256k1_context *global_ctx = NULL;
-
-int pubkey_combine(secp256k1_pubkey *pubnonce, const secp256k1_pubkey *const *pubnonces, size_t n)
-{
-    return secp256k1_ec_pubkey_combine(secp256k1_context_no_precomp, pubnonce, pubnonces, n);
-}
-
-int pubkey_negate(secp256k1_pubkey *pubkey)
-{
-    return secp256k1_ec_pubkey_negate(secp256k1_context_no_precomp, pubkey);
-}
+/* Global extended error code. Not thread-safe unless caller-overridden */
+static int global_error = WALLY_OK;
 
 int pubkey_parse(secp256k1_pubkey *pubkey, const unsigned char *input, size_t input_len)
 {
-    return secp256k1_ec_pubkey_parse(secp256k1_context_no_precomp, pubkey, input, input_len);
+    return secp256k1_ec_pubkey_parse(secp256k1_context_static, pubkey, input, input_len);
 }
 
 int pubkey_serialize(unsigned char *output, size_t *outputlen, const secp256k1_pubkey *pubkey, unsigned int flags)
 {
-    return secp256k1_ec_pubkey_serialize(secp256k1_context_no_precomp, output, outputlen, pubkey, flags);
+    return secp256k1_ec_pubkey_serialize(secp256k1_context_static, output, outputlen, pubkey, flags);
 }
 
 int xpubkey_parse(secp256k1_xonly_pubkey *xpubkey, const unsigned char *input, size_t input_len)
 {
-    const secp256k1_context *ctx = secp256k1_context_no_precomp;
+    const secp256k1_context *ctx = secp256k1_context_static;
     if (input_len == EC_PUBLIC_KEY_UNCOMPRESSED_LEN)
         return 0;
     if (input_len == EC_PUBLIC_KEY_LEN) {
@@ -60,78 +48,29 @@ int xpubkey_tweak_add(secp256k1_pubkey *pubkey,
                       const secp256k1_xonly_pubkey *xpubkey,
                       const unsigned char *tweak)
 {
-    return secp256k1_xonly_pubkey_tweak_add(secp256k1_context_no_precomp,
+    return secp256k1_xonly_pubkey_tweak_add(secp256k1_context_static,
                                             pubkey, xpubkey, tweak);
-}
-
-int xpubkey_serialize(unsigned char *output, const secp256k1_xonly_pubkey *xpubkey)
-{
-    return secp256k1_xonly_pubkey_serialize(secp256k1_context_no_precomp, output, xpubkey);
 }
 
 int seckey_verify(const unsigned char *seckey)
 {
-    return secp256k1_ec_seckey_verify(secp256k1_context_no_precomp, seckey);
+    return secp256k1_ec_seckey_verify(secp256k1_context_static, seckey);
 }
 
 int seckey_negate(unsigned char *seckey)
 {
-    return secp256k1_ec_seckey_negate(secp256k1_context_no_precomp, seckey);
+    return secp256k1_ec_seckey_negate(secp256k1_context_static, seckey);
 }
 
 int seckey_tweak_add(unsigned char *seckey, const unsigned char *tweak)
 {
-    return secp256k1_ec_seckey_tweak_add(secp256k1_context_no_precomp, seckey, tweak);
+    return secp256k1_ec_seckey_tweak_add(secp256k1_context_static, seckey, tweak);
 }
 
 int seckey_tweak_mul(unsigned char *seckey, const unsigned char *tweak)
 {
-    return secp256k1_ec_seckey_tweak_mul(secp256k1_context_no_precomp, seckey, tweak);
+    return secp256k1_ec_seckey_tweak_mul(secp256k1_context_static, seckey, tweak);
 }
-
-int keypair_create(secp256k1_keypair *keypair, const unsigned char *priv_key)
-{
-    return secp256k1_keypair_create(secp_ctx(), keypair, priv_key);
-}
-
-int keypair_xonly_pub(secp256k1_xonly_pubkey *xpubkey, const secp256k1_keypair *keypair)
-{
-    return secp256k1_keypair_xonly_pub(secp256k1_context_no_precomp, xpubkey, NULL, keypair);
-}
-
-int keypair_sec(unsigned char *output, const secp256k1_keypair *keypair)
-{
-    return secp256k1_keypair_sec(secp256k1_context_no_precomp, output, keypair);
-}
-
-int keypair_xonly_tweak_add(secp256k1_keypair *keypair, const unsigned char *tweak)
-{
-    return secp256k1_keypair_xonly_tweak_add(secp256k1_context_no_precomp, keypair, tweak);
-}
-
-#ifndef SWIG
-struct secp256k1_context_struct *wally_get_secp_context(void)
-{
-    return (struct secp256k1_context_struct *)secp_ctx();
-}
-#endif
-
-int wally_secp_randomize(const unsigned char *bytes, size_t bytes_len)
-{
-    secp256k1_context *ctx;
-
-    if (!bytes || bytes_len != WALLY_SECP_RANDOMIZE_LEN)
-        return WALLY_EINVAL;
-
-    if (!(ctx = (secp256k1_context *)secp_ctx()))
-        return WALLY_ENOMEM;
-
-    if (!secp256k1_context_randomize(ctx, bytes))
-        return WALLY_ERROR;
-
-    return WALLY_OK;
-}
-#endif
 
 int wally_free_string(char *str)
 {
@@ -192,16 +131,24 @@ int wally_sha256(const unsigned char *bytes, size_t bytes_len,
 
 static void sha256_midstate(struct sha256_ctx *ctx, struct sha256 *res)
 {
-    size_t i;
-
 #ifdef CCAN_CRYPTO_SHA256_USE_MBEDTLS
+#ifndef CONFIG_MBEDTLS_HARDWARE_SHA
+#define SHA_CTX_STATE c.MBEDTLS_PRIVATE(state)
+#else
 #define SHA_CTX_STATE c.state
+#endif
 #else
 #define SHA_CTX_STATE s
 #endif
 
-    for (i = 0; i < sizeof(ctx->SHA_CTX_STATE) / sizeof(ctx->SHA_CTX_STATE[0]); i++)
+#if defined(CCAN_CRYPTO_SHA256_USE_MBEDTLS) && \
+    defined(MBEDTLS_SHA256_ALT) && !defined(SOC_SHA_SUPPORT_PARALLEL_ENG)
+    /* HW: Already big endian */
+    memcpy(res->u.u32, ctx->SHA_CTX_STATE, sizeof(ctx->SHA_CTX_STATE));
+#else
+    for (size_t i = 0; i < NUM_ELEMS(ctx->SHA_CTX_STATE); i++)
         res->u.u32[i] = cpu_to_be32(ctx->SHA_CTX_STATE[i]);
+#endif
 
 #ifndef CCAN_CRYPTO_SHA256_USE_MBEDTLS
     ctx->bytes = (size_t)-1;
@@ -219,11 +166,6 @@ int wally_sha256_midstate(const unsigned char *bytes, size_t bytes_len,
         return WALLY_EINVAL;
 
     sha256_init(&ctx);
-#if defined(CCAN_CRYPTO_SHA256_USE_MBEDTLS) && \
-    defined(MBEDTLS_SHA256_ALT) && defined(SOC_SHA_SUPPORT_PARALLEL_ENG)
-    /* HW sha engine doesn't allow to extract the midstate */
-    ctx.c.mode = ESP_MBEDTLS_SHA256_SOFTWARE;
-#endif
     sha256_update(&ctx, bytes, bytes_len);
     sha256_midstate(&ctx, aligned ? (void *)bytes_out : (void *)&sha);
     wally_clear(&ctx, sizeof(ctx));
@@ -377,6 +319,16 @@ struct secp256k1_context_struct *wally_internal_secp_context(void)
 }
 #endif
 
+int wally_internal_get_error(void) {
+    return global_error;
+}
+
+int wally_internal_set_error(int error_code)
+{
+    global_error = error_code;
+    return error_code;
+}
+
 static struct wally_operations _ops = {
     sizeof(struct wally_operations),
     wally_internal_malloc,
@@ -390,19 +342,16 @@ static struct wally_operations _ops = {
     NULL,
     NULL,
 #endif
-    NULL,
-    NULL,
+    wally_internal_get_error,
+    wally_internal_set_error,
     NULL,
     NULL
 };
 
-#if 0
-/* SECP256K1 exclude */
 const secp256k1_context *secp_ctx(void)
 {
-    return (const secp256k1_context *)_ops.secp_context_fn();
+    return secp256k1_context_static;
 }
-#endif
 
 void *wally_malloc(size_t size)
 {
@@ -425,7 +374,9 @@ char *wally_strdup_n(const char *str, size_t str_len)
 {
     char *new_str = (char *)wally_malloc(str_len + 1);
     if (new_str) {
-        memcpy(new_str, str, str_len);
+        if (str_len) {
+            memcpy(new_str, str, str_len);
+        }
         new_str[str_len] = '\0';
     }
     return new_str;
@@ -434,6 +385,15 @@ char *wally_strdup_n(const char *str, size_t str_len)
 char *wally_strdup(const char *str)
 {
     return wally_strdup_n(str, strlen(str));
+}
+
+int wally_get_error(void) {
+    return _ops.get_error_fn();
+}
+
+int wally_set_error(int error_code)
+{
+    return _ops.set_error_fn(error_code);
 }
 
 const struct wally_operations *wally_ops(void)
@@ -455,7 +415,7 @@ int wally_set_operations(const struct wally_operations *ops)
         return WALLY_EINVAL; /* Null or invalid version of ops */
     /* Reserved pointers must be null so they can be enabled in the
      * future without breaking back compatibility */
-    if (ops->reserved_1 || ops->reserved_2 || ops->reserved_3 || ops->reserved_4)
+    if (ops->reserved_3 || ops->reserved_4)
         return WALLY_EINVAL;
 
 #define COPY_FN_PTR(name) if (ops->name) _ops.name = ops->name
@@ -464,6 +424,8 @@ int wally_set_operations(const struct wally_operations *ops)
     COPY_FN_PTR (bzero_fn);
     COPY_FN_PTR (ec_nonce_fn);
     COPY_FN_PTR (secp_context_fn);
+    COPY_FN_PTR (get_error_fn);
+    COPY_FN_PTR (set_error_fn);
 #undef COPY_FN_PTR
     return WALLY_OK;
 }

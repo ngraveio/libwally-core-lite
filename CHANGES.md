@@ -1,5 +1,240 @@
 # Changes
 
+## Version 1.5.3
+
+### Added
+- bip32: Add updated BIP checks to bip32_key_unserialize().
+- build: Add support for fuzzing wally API calls.
+
+### Fixed
+- psbt: corectly handle allocation failures in psbt_set_global_tx().
+- tx: Avoid quadratic behaviour parsing txs with a huge number of witnesses.
+- tx: Fix parsing Liquid transactions with short commitments.
+- tx: Reject non-corresponding output as per bip341 when signing.
+- map: Fix incorrect clear when reinserting an integer after removing bytes.
+- js: Bump webpack, serialize-javascript and terser-webpack-plugin dependencies.
+- Various minor code and build fixes.
+
+## Version 1.5.2
+
+### Added
+- taproot: Add bip341_control_block_verify().
+
+### Changed
+- map: Ignore duplicates in map_merkle_path_add() for consistency.
+
+### Fixed
+- build: Fix building with the Elements ABI disabled.
+- tx: Fix BIP118 ANYPREVOUTANYSCRIPT sighash computation.
+- psbt: Fix merkle path, witness and buffer length checks when parsing.
+
+## Version 1.5.1
+
+### Added
+- python: Add wheels for Python 3.13, remove support for Python 3.8.
+
+### Fixed
+- python: Fix source builds for newer pip versions.
+- java: Fix tx_get_input_signature_hash to allow passing a null cache to disable caching.
+
+## Version 1.5.0
+
+### Added
+- psbt: Add psbt_get_input_signature_type to get the type of signature required by an input.
+- descriptor: Add support for Elements el-prefixed descriptor builtins as used in rust-elements.
+- descriptor: Add support for parsing Elements ct descriptors with slip77(), elip150() and raw hex blinding keys.
+- descriptor: Add support for generating Elements confidential addresses from ct descriptors.
+- descriptor: Expose functions to perform ELIP-150 blinding key tweaking.
+- crypto: Add ec_public_key_tweak to tweak standard (non-xonly) pubkeys.
+- elements: Add asset_blinding_key_to_ec_public_key to compute the blinding pubkey from a blinding key.
+
+### Changed
+- psbt: Speed up p2tr signing slightly.
+- descriptor: Allow U type children for thresh() expressions.
+- build: Further extend CI coverage for scan-build/valgrind/asan checks.
+
+### Fixed
+- tx: Fix taproot cached hashing when using external sha256 implementations.
+- wasm: Fixes for es6 and cjs.
+- address_to_scriptpubkey: Correctly handle WALLY_NETWORK_BITCOIN_REGTEST.
+- amalgamation: Support all supported standard configurations. Minor improvements to make usage easier/more robust.
+- Various minor code and build fixes.
+
+## Version 1.4.0
+
+### Added
+
+- tx: Add caching to signature hash generation/PSBT signing making signing faster.
+- tx: Add support for generating Elements taproot signature hashes and signing Elements taproot inputs.
+- descriptor: Add support for "tr()/rawtr()" keyspend-only taproot descriptors.
+- descriptor: Add support for parsing Elements-core compatible descriptors, including taproot.
+- psbt: Add accessors for keypath/taproot related fields.
+- pset: Add support for ELIP-101 genesis hash.
+- psbt: Add support for serializing/parsing/combining signature-only PSBTs.
+- script: Add support for generating Elements p2tr scripts.
+- BIP85: Add support for deriving RSA keys via BIP85.
+- base64/psbt: Add support for parsing from known length (non-NUL terminated) strings.
+- build: Add Debian Bookworm docker build image.
+
+### Changed
+
+- tx: Re-implement signature hash generation to use less stack space and CPU independently of caching.
+- amalgamation: Provide the amalgamated build as a single source file, make it simpler to use.
+- build: CI improvements: New valgrind, scan-build and ubsan/addrcheck/etc builds. Add CI/test runs
+  for builds with elements support disabled.
+- build: Update/extend tests to make it easier to catch errors in the new CI builds.
+
+### Fixed
+
+- psbt: Fix detection of expired CSV inputs for v0 PSBTs.
+- psbt: Fix finalization of non-optimized CSV inputs (e.g. Green Liquid 2of2).
+- tx: Fix incorrect sighash masking for BTC taproot inputs.
+- build: Various fixes and test improvements for non-Elements builds.
+- Various minor code and build fixes.
+
+## Version 1.3.1
+
+### Added
+
+- Elements: Add `wally_tx_get_elements_weight_discount` for computing ELIP-0200 weight discounts.
+
+### Changed
+
+- Update JS dependencies.
+
+### Fixed
+
+- Minor build/CI fixes.
+
+## Version 1.3.0
+
+### Added
+
+- script: Add support for fetching the CSV block count for Green CSV scripts.
+- psbt_finalize: Add support for finalizing Green CSV inputs.
+
+### Changed
+
+- PSBT: Do not serialize witness data for input non-witness UTXOs, in
+  order to match the current behaviour of Bitcoin core.
+
+### Fixed
+- psbt_sign_bip32: Fix signing with parent/master keys. Only already-derived
+  keys would result in signed inputs previously.
+- PSET: Allow signing pre-segwit inputs.
+- PSET: Allow generating explicit proofs for inputs with only a non-witness UTXO.
+- wally_scriptpubkey_get_type: Mark all scripts starting with OP_RETURN as
+  WALLY_SCRIPT_TYPE_OP_RETURN.
+
+## Version 1.2.0
+
+### Added
+
+- Python: Add Python 3.12 wheels to the binary releases/PyPI.
+- tx: expose `wally_tx_input_clone`/`wally_tx_input_clone` for input cloning.
+- Build: Add new static analysis CI runs.
+
+### Changed
+
+- Javascript: The npm build now uses nodejs 20, as nodejs 16 is end-of-life.
+- Android: Update android NDK to version 26b.
+- libsecp256k1-zkp: The library has been updated to include the latest
+  changes to its cmake infrastructure.
+- cmake: Now takes advantage of the new libsecp256k1-zkp cmake files to build
+  experimental modules and export the project in cmake style. cmake now also
+  builds test and collects coverage data.
+
+### Fixed
+
+- Build: Don't use `which` on Debian as it is now deprecated.
+- Various bug fixes from static analysis.
+- Various build and documentation fixes.
+
+
+## Version 1.1.0
+
+### Added
+
+- PSBT: Allow extracting partially finalized transactions in `wally_psbt_extract`
+  by passing a new `WALLY_PSBT_EXTRACT_OPT_FINAL` flag.
+- tx: Allow getting the number of items in a transactions input witness via
+  `wally_tx_input_get_witness_num_items`/`wally_tx_get_input_witness_num_items`.
+
+### Changed
+
+### Fixed
+
+- tx: tx_input_get_witness now correctly returns 0 bytes written if passed a
+  NULL input.
+
+
+## Version 1.0.0
+
+This release contains ABI changes; it is not ABI compatibile with prior versions.
+
+### Added
+
+- The library version number is now available as compile time constants
+  (`WALLY_MAJOR_VER`, `WALLY_MINOR_VER`, `WALLY_PATCH_VER`, `WALLY_BUILD_VER`),
+  and at runtime via `wally_get_build_version`.
+- Added support for wallet policies (https://github.com/bitcoin/bips/pull/1389).
+- Added support for iterating and querying keys in descriptor/policy
+  expressions, including support for key origin information such as
+  fingerprint and path.
+- The library allocation functions (which may be overridden by the caller
+  at runtime) are now exposed as wally_[malloc|calloc|free|strdup|strdump_n].
+  Libraries using wally that wish to respect the callers allocation strategy
+  can use these to avoid having to expose their own customizable allocator.
+- Added support for encrypted request/response protocols using ephemeral keys
+  via aes_cbc_with_ecdh_key().
+- The PyPI wheel uploads now include an sdist source distribution, allowing
+  install on otherwise-unsupported architectures.
+
+### Changed
+
+- The library now follows semantic versioning as per https://semver.org/.
+- Elements support is now enabled by default, reflecting the common library
+  usage. Please see the `configure --help` entries for `--disable-elements`
+  and `--disable-elements-abi` for details.
+- The ABI of the library is now consistent by default regardless of whether
+  it is built with or without Elements support.
+- The constant EC_SIGNATURE_DER_MAX_LOW_R_LEN has been changed from 71 to 70,
+  to reflect that wally always produced low-R, low-S signatures when grinding.
+- When configured to build as a static library, linking to libwallycore.a
+  requires additionally linking to libsecp256k1.a.
+- Wally can now be configured to build against a system-wide libsecp256k1 by
+  passing `--with-system-secp256k1` to configure.
+- The Python wheel can now be built with standard Python tooling such as `build`,
+  and can be built from an uploaded source distribution.
+- The Python wheel can now be built with dynamic linking to libwallycore and
+  libsecp256k1-zkp/libsecp256k1.
+- libsecp256k1-zkp has been updated to the lastest master version as at
+  the time of release.
+- Some functions in the c++ header wally.hpp have changed interface slightly.
+  Note that this header is deprecated and will be replaced in an upcoming
+  release with higher level wrappers in the same manner as Python and JS.
+- The docker-based builds have been streamlined and simplified. NPM builds in
+  particular are now much faster.
+
+### Fixed
+
+- Fixed a bug affecting signing PSBT taproot inputs.
+- Fixed extern libsecp256k1-zkp linkage for windows static builds.
+- Several build fixes/improvements and CI updates have been made.
+
+
+## Version 0.9.1
+- PSET: When adding an Elements transaction output to a PSET, the nonce
+  commitment was incorrectly mapped to the PSET output blinding key field.
+  It is now correctly mapped to the ECDH public key field.
+- Transaction versions less than 2 are now upgraded to version 2 when
+  converting a version 0 PSBT to version 2.
+- Fetching nested structures (e.g. witness stacks) from PSBTs where no
+  structure is present now returns NULL without returning an error.
+- Python wheels are no longer released for deprecated versions 3.6/3.7.
+- Python wheels are now available through pip for musl-based x86 platforms
+  such as Apline Linux.
+
 ## Version 0.9.0
 - ABI: wally_descriptor_to_script_get_maximum_length has changed its arguments
   to match wally_descriptor_to_script.

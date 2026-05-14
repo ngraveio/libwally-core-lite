@@ -2,15 +2,9 @@
 #define LIBWALLY_INTERNAL_H
 
 #include <include/wally_core.h>
-#if 0
-/* SECP256K1 exclude */
-#include "secp256k1/include/secp256k1.h"
-#include "secp256k1/include/secp256k1_recovery.h"
-#include "secp256k1/include/secp256k1_extrakeys.h"
-#ifndef BUILD_STANDARD_SECP
-#include "secp256k1/include/secp256k1_ecdsa_s2c.h"
-#endif
-#endif
+
+#include <secp256k1.h>
+#include <secp256k1_extrakeys.h>
 #include <config.h>
 #if defined(HAVE_MEMSET_S)
 #define __STDC_WANT_LIB_EXT1__ 1
@@ -18,40 +12,26 @@
 #include <stdbool.h>
 #include <string.h>
 
-#if 0
-/* SECP256K1 exclude */
 /* Fetch an internal secp context */
 const secp256k1_context *secp_ctx(void);
 #define secp256k1_context_destroy(c) _do_not_destroy_shared_ctx_pointers(c)
 
-/* secp pub/priv key functions */
-#define pubkey_create     secp256k1_ec_pubkey_create
-#define pubkey_tweak_add  secp256k1_ec_pubkey_tweak_add
-
-int pubkey_combine(secp256k1_pubkey *pubnonce, const secp256k1_pubkey *const *pubnonces, size_t n);
-int pubkey_negate(secp256k1_pubkey *pubkey);
 int pubkey_parse(secp256k1_pubkey *pubkey, const unsigned char *input, size_t input_len);
 int pubkey_serialize(unsigned char *output, size_t *outputlen, const secp256k1_pubkey *pubkey, unsigned int flags);
 /* Note xpubkey_parse accepts standard compressed pubkeys as well as x-only */
 int xpubkey_parse(secp256k1_xonly_pubkey *pubkey, const unsigned char *input, size_t input_len);
 int xpubkey_tweak_add(secp256k1_pubkey *pubkey, const secp256k1_xonly_pubkey *xpubkey, const unsigned char *tweak);
-int xpubkey_serialize(unsigned char *output, const secp256k1_xonly_pubkey *xpubkey);
-#endif
+
 int seckey_verify(const unsigned char *seckey);
 int seckey_negate(unsigned char *seckey);
 int seckey_tweak_add(unsigned char *seckey, const unsigned char *tweak);
 int seckey_tweak_mul(unsigned char *seckey, const unsigned char *tweak);
-#if 0
-/* SECP256K1 exclude */
-int keypair_create(secp256k1_keypair *keypair, const unsigned char *priv_key);
-int keypair_xonly_pub(secp256k1_xonly_pubkey *xpubkey, const secp256k1_keypair *keypair);
-int keypair_sec(unsigned char *output, const secp256k1_keypair *keypair);
-int keypair_xonly_tweak_add(secp256k1_keypair *keypair, const unsigned char *tweak);
+
+#define pubkey_create     secp256k1_ec_pubkey_create
+#define pubkey_tweak_add  secp256k1_ec_pubkey_tweak_add
 
 #define PUBKEY_COMPRESSED   SECP256K1_EC_COMPRESSED
 #define PUBKEY_UNCOMPRESSED SECP256K1_EC_UNCOMPRESSED
-
-#endif
 
 void wally_clear(void *p, size_t len);
 void wally_clear_2(void *p, size_t len, void *p2, size_t len2);
@@ -68,12 +48,7 @@ bool mem_is_zero(const void *mem, size_t len);
 /* Fetch our internal operations function pointers */
 const struct wally_operations *wally_ops(void);
 
-void *wally_malloc(size_t size);
-void *wally_calloc(size_t size);
-void wally_free(void *ptr);
-char *wally_strdup_n(const char *str, size_t str_len);
-char *wally_strdup(const char *str);
-
+#ifndef BUILD_AMALGAMATION
 #define malloc(size) __use_wally_malloc_internally__
 #define calloc(size) __use_wally_calloc_internally__
 #define free(ptr) __use_wally_free_internally__
@@ -81,6 +56,9 @@ char *wally_strdup(const char *str);
 #undef strdup
 #endif
 #define strdup(ptr) __use_wally_strdup_internally__
+#endif
+
+#define NUM_ELEMS(a) (sizeof(a) / sizeof(a[0]))
 
 /* Validity checking for input parameters */
 #define BYTES_VALID(p, len) ((p != NULL) == (len != 0))
@@ -128,5 +106,16 @@ const struct wally_map_item *map_find_equal_integer(const struct wally_map *lhs,
 
 /* Clamp initial witness stack allocation sizing */
 #define MAX_WITNESS_ITEMS_ALLOC 100u /* Non-Taproot standardness limit */
+
+/* Allows allocating a larger witness for e.g deserializing */
+struct wally_tx_witness_stack;
+int tx_witness_stack_init_alloc(size_t allocation_len,
+                                size_t max_allocation_len,
+                                struct wally_tx_witness_stack **output);
+
+/* Absolute maximum number of inputs and outputs for BTC.
+ * Liquid numbers are smaller; we use the upper limit */
+#define TX_MAX_INPUTS (TX_MAX_INPUTS_ALLOC * 10)
+#define TX_MAX_OUTPUTS (TX_MAX_OUTPUTS_ALLOC * 10)
 
 #endif /* LIBWALLY_INTERNAL_H */

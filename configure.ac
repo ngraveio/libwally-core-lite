@@ -242,6 +242,8 @@ AC_CONFIG_FILES([
  src/wallylite.pc
 ])
 
+AC_CONFIG_SUBDIRS([src/secp256k1])
+
 export CC
 export CFLAGS
 export AR
