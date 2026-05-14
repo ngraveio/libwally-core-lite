@@ -15,19 +15,31 @@ struct wally_descriptor;
 #define WALLY_MINISCRIPT_TAPSCRIPT        0x01 /** Tapscript, use x-only pubkeys */
 #define WALLY_MINISCRIPT_ONLY             0x02 /** Only allow miniscript (not descriptor) expressions */
 #define WALLY_MINISCRIPT_REQUIRE_CHECKSUM 0x04 /** Require a checksum to be present */
+#define WALLY_MINISCRIPT_POLICY_TEMPLATE  0x08 /** Only allow policy templates with @n BIP32 keys */
+#define WALLY_MINISCRIPT_UNIQUE_KEYPATHS  0x10 /** For policy templates, ensure BIP32 derivation paths differ for identical keys */
+#define WALLY_MINISCRIPT_AS_ELEMENTS      0x20 /** Treat non-elements expressions as elements, e.g. tr() as eltr() */
 #define WALLY_MINISCRIPT_DEPTH_MASK       0xffff0000 /** Mask for limiting maximum depth */
 #define WALLY_MINISCRIPT_DEPTH_SHIFT      16 /** Shift to convert maximum depth to flags */
 
 /*** miniscript-features Miniscript/Descriptor feature flags */
-#define WALLY_MS_IS_RANGED       0x01 /** Allows key ranges via ``*`` */
-#define WALLY_MS_IS_MULTIPATH    0x02 /** Allows multiple paths via ``<a;b;c>`` */
-#define WALLY_MS_IS_PRIVATE      0x04 /** Contains at least one private key */
-#define WALLY_MS_IS_UNCOMPRESSED 0x08 /** Contains at least one uncompressed key */
-#define WALLY_MS_IS_RAW          0x10 /** Contains at least one raw key */
-#define WALLY_MS_IS_DESCRIPTOR   0x20 /** Contains only descriptor expressions (no miniscript) */
+#define WALLY_MS_IS_RANGED        0x001 /** Allows key ranges via ``*`` */
+#define WALLY_MS_IS_MULTIPATH     0x002 /** Allows multiple paths via ``<a;b;c>`` */
+#define WALLY_MS_IS_PRIVATE       0x004 /** Contains at least one private key */
+#define WALLY_MS_IS_UNCOMPRESSED  0x008 /** Contains at least one uncompressed key */
+#define WALLY_MS_IS_RAW           0x010 /** Contains at least one raw key */
+#define WALLY_MS_IS_DESCRIPTOR    0x020 /** Contains only descriptor expressions (no miniscript) */
+#define WALLY_MS_IS_X_ONLY        0x040 /** Contains at least one x-only key */
+#define WALLY_MS_IS_PARENTED      0x080 /** Contains at least one key key with a parent key origin */
+#define WALLY_MS_IS_ELEMENTS      0x100 /** Contains Elements expressions or was parsed as Elements */
+#define WALLY_MS_IS_SLIP77        0x200 /** A confidential ct() descriptor with SLIP-77 blinding */
+#define WALLY_MS_IS_ELIP150       0x400 /** A confidential ct() descriptor with ELIP-150 blinding */
+#define WALLY_MS_IS_ELIP151       0x800 /** A confidential ct() descriptor with ELIP-151 blinding */
+#define WALLY_MS_ANY_BLINDING_KEY 0xE00 /** SLIP-77, ELIP-150 or ELIP-151 blinding key present */
 
 /*** ms-canonicalization-flags Miniscript/Descriptor canonicalization flags */
 #define WALLY_MS_CANONICAL_NO_CHECKSUM 0x01 /** Do not include a checksum */
+
+#define WALLY_MS_BLINDING_KEY_INDEX 0xffffffff /* Key index for confidential blinding key */
 
 /**
  * Parse an output descriptor or miniscript expression.
@@ -181,6 +193,120 @@ WALLY_CORE_API int wally_descriptor_get_depth(
     uint32_t *value_out);
 
 /**
+ * Get the number of keys in a parsed output descriptor or miniscript expression.
+ *
+ * :param descriptor: Parsed output descriptor or miniscript expression.
+ * :param value_out: Destination for the number of keys.
+ *
+ * .. note:: Repeated keys are counted once for each time they appear, and any
+ *|    blinding key within the descriptor is not included in the count.
+ */
+WALLY_CORE_API int wally_descriptor_get_num_keys(
+    const struct wally_descriptor *descriptor,
+    uint32_t *value_out);
+
+/**
+ * Get the string representation of a key in a parsed output descriptor or miniscript expression.
+ *
+ * :param descriptor: Parsed output descriptor or miniscript expression.
+ * :param index: The zero-based index of the key to get, or `WALLY_MS_BLINDING_KEY_INDEX`
+ *|    to fetch the descriptors blinding key representaton (if any).
+ * :param output: Destination for the resulting string representation.
+ *|    The string returned should be freed using `wally_free_string`.
+ *
+ * .. note:: Keys may be BIP32 xpub/xpriv, WIF or hex pubkeys, and may be
+ *|    x-only. The caller can use `wally_descriptor_get_key_features` to
+ *|    determine the type of a given key.
+ *
+ * .. note:: Raw private blinding keys are returned as hex, not WIF.
+ */
+WALLY_CORE_API int wally_descriptor_get_key(
+    const struct wally_descriptor *descriptor,
+    size_t index,
+    char **output);
+
+/**
+ * Get the features of a key in a parsed output descriptor or miniscript expression.
+ *
+ * :param descriptor: Parsed output descriptor or miniscript expression.
+ * :param index: The zero-based index of the key to get, or `WALLY_MS_BLINDING_KEY_INDEX`
+ *|    to fetch the descriptors blinding key features (if any).
+ * :param value_out: Destination for the resulting :ref:`miniscript-features`.
+ */
+WALLY_CORE_API int wally_descriptor_get_key_features(
+    const struct wally_descriptor *descriptor,
+    size_t index,
+    uint32_t *value_out);
+
+/**
+ * Get the length of a keys child path string in a parsed output descriptor or miniscript expression.
+ *
+ * :param descriptor: Parsed output descriptor or miniscript expression.
+ * :param index: The zero-based index of the key whose child path to get.
+ * :param written: Destination for the length of the keys child path string,
+ *|    excluding the NUL terminator (zero if not present).
+ */
+WALLY_CORE_API int wally_descriptor_get_key_child_path_str_len(
+    const struct wally_descriptor *descriptor,
+    size_t index,
+    size_t *written);
+
+/**
+ * Get the keys child path string in a parsed output descriptor or miniscript expression.
+ *
+ * :param descriptor: Parsed output descriptor or miniscript expression.
+ * :param index: The zero-based index of the key whose child path to get.
+ * :param output: Destination for the resulting path string (empty if not present).
+ *|    The string returned should be freed using `wally_free_string`.
+ */
+WALLY_CORE_API int wally_descriptor_get_key_child_path_str(
+    const struct wally_descriptor *descriptor,
+    size_t index,
+    char **output);
+
+/**
+ * Get the keys parent BIP32 fingerprint in a parsed output descriptor or miniscript expression.
+ *
+ * :param descriptor: Parsed output descriptor or miniscript expression.
+ * :param index: The zero-based index of the key whose parent fingerprint to get.
+ * :param bytes_out: Destination for the fingerprint.
+ * FIXED_SIZED_OUTPUT(len, bytes_out, BIP32_KEY_FINGERPRINT_LEN)
+ *
+ * If the key does not contain key origin information then `WALLY_EINVAL` is returned.
+ */
+WALLY_CORE_API int wally_descriptor_get_key_origin_fingerprint(
+    const struct wally_descriptor *descriptor,
+    size_t index,
+    unsigned char *bytes_out,
+    size_t len);
+
+/**
+ * Get the length of a keys parent path string in a parsed output descriptor or miniscript expression.
+ *
+ * :param descriptor: Parsed output descriptor or miniscript expression.
+ * :param index: The zero-based index of the key whose parent path to get.
+ * :param written: Destination for the length of the keys parent path string,
+ *|    excluding the NUL terminator (zero if not present).
+ */
+WALLY_CORE_API int wally_descriptor_get_key_origin_path_str_len(
+    const struct wally_descriptor *descriptor,
+    size_t index,
+    size_t *written);
+
+/**
+ * Get the keys parent path string in a parsed output descriptor or miniscript expression.
+ *
+ * :param descriptor: Parsed output descriptor or miniscript expression.
+ * :param index: The zero-based index of the key whose parent path to get.
+ * :param output: Destination for the resulting path string (empty if not present).
+ *|    The string returned should be freed using `wally_free_string`.
+ */
+WALLY_CORE_API int wally_descriptor_get_key_origin_path_str(
+    const struct wally_descriptor *descriptor,
+    size_t index,
+    char **output);
+
+/**
  * Get the maximum length of a script corresponding to an output descriptor.
  *
  * :param descriptor: Parsed output descriptor or miniscript expression.
@@ -247,7 +373,7 @@ WALLY_CORE_API int wally_descriptor_to_script(
  * :param multi_index: The multi-path item to generate. See `wally_descriptor_get_num_paths`.
  * :param child_num: The BIP32 child number to derive, or zero for static descriptors.
  * :param flags: For future use. Must be 0.
- * :param output: Destination for the resulting addresss.
+ * :param output: Destination for the resulting address.
  *|    The string returned should be freed using `wally_free_string`.
  */
 WALLY_CORE_API int wally_descriptor_to_address(

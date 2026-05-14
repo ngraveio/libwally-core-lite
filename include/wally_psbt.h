@@ -30,13 +30,21 @@ extern "C" {
 #define WALLY_PSET_TXMOD_RESERVED 0x1 /* Elements: Reserved: not used and ignored if set */
 
 #define WALLY_PSBT_PARSE_FLAG_STRICT 0x1 /* Parse strictly according to the PSBT/PSET spec */
+#define WALLY_PSBT_PARSE_FLAG_LOOSE 0x2 /* Allow disallowed and missing mandatory fields */
 
 /** Include redundant information to match some buggy PSBT implementations */
 #define WALLY_PSBT_SERIALIZE_FLAG_REDUNDANT 0x1
+/* Serialize a minimal PSBT containing signatures only (for combining) */
+#define WALLY_PSBT_SERIALIZE_SIGS_ONLY 0x2
 
-#define WALLY_PSBT_EXTRACT_NON_FINAL 0x1 /* Extract without final scriptsig and witness */
+/*** psbt-extract Transaction extraction flags */
+#define WALLY_PSBT_EXTRACT_FINAL     0x0 /* Extract a final transaction; fail if any inputs aren't finalized */
+#define WALLY_PSBT_EXTRACT_NON_FINAL 0x1 /* Extract without any final scriptsig and witness */
+#define WALLY_PSBT_EXTRACT_OPT_FINAL 0x2 /* Extract only final scriptsigs and witnesses that are present (partial finalization) */
 
 #define WALLY_PSBT_FINALIZE_NO_CLEAR 0x1 /* Finalize without clearing redeem/witness scripts etc */
+
+#define WALLY_PSBT_COMBINE_SIGS 0x1 /* Combine the signatures from a signature-only PSBT */
 
 /*** psbt-id-flags PSBT ID calculation flags */
 #define WALLY_PSBT_ID_BIP370 0x0 /* BIP370 compatible */
@@ -52,8 +60,6 @@ extern "C" {
 #define WALLY_PSET_BLIND_ALL 0xffffffff /* Blind all outputs in wally_psbt_blind */
 
 #define WALLY_SCALAR_OFFSET_LEN 32 /* Length of a PSET scalar offset */
-
-struct ext_key;
 
 #ifdef SWIG
 struct wally_psbt_input;
@@ -82,7 +88,7 @@ struct wally_psbt_input {
     /* Hashes and paths for taproot bip32 derivation path */
     struct wally_map taproot_leaf_hashes;
     struct wally_map taproot_leaf_paths;
-#ifdef BUILD_ELEMENTS
+#ifndef WALLY_ABI_NO_ELEMENTS
     uint64_t issuance_amount; /* Issuance amount, or 0 if not given */
     uint64_t inflation_keys; /* Number of reissuance tokens, or 0 if none given */
     uint64_t pegin_amount; /* Peg-in amount, or 0 if none given */
@@ -91,7 +97,7 @@ struct wally_psbt_input {
     struct wally_map pset_fields; /* Commitments/scripts/proofs etc keyed by PSET keytype*/
     uint64_t amount; /* Explicit amount (not normally present, used for mixed-creator txs) */
     uint32_t has_amount;
-#endif /* BUILD_ELEMENTS */
+#endif /* WALLY_ABI_NO_ELEMENTS */
 };
 
 /** A PSBT output */
@@ -104,16 +110,16 @@ struct wally_psbt_output {
     size_t script_len;
     struct wally_map psbt_fields; /* Binary fields keyed by PSBT keytype */
     /* Map of 1-based position to taproot leaf script, in depth first order.
-    * TODO: replace this with actual TR representaion when TR implemented */
+    * TODO: replace this with actual TR representation when TR implemented */
     struct wally_map taproot_tree;
     /* Hashes and paths for taproot bip32 derivation path */
     struct wally_map taproot_leaf_hashes;
     struct wally_map taproot_leaf_paths;
-#ifdef BUILD_ELEMENTS
+#ifndef WALLY_ABI_NO_ELEMENTS
     uint32_t blinder_index; /* Index of the input whose owner should blind this output */
     uint32_t has_blinder_index;
     struct wally_map pset_fields; /* Commitments/pubkeys/proofs etc keyed by PSET keytype*/
-#endif /* BUILD_ELEMENTS */
+#endif /* WALLY_ABI_NO_ELEMENTS */
 };
 
 /** A partially signed bitcoin transaction */
@@ -133,10 +139,12 @@ struct wally_psbt {
     uint32_t fallback_locktime;
     uint32_t has_fallback_locktime;
     uint32_t tx_modifiable_flags;
-#ifdef BUILD_ELEMENTS
+#ifndef WALLY_ABI_NO_ELEMENTS
     struct wally_map global_scalars;
     uint32_t pset_modifiable_flags;
-#endif /* BUILD_ELEMENTS */
+    unsigned char genesis_blockhash[SHA256_LEN]; /* All zeros if not present */
+#endif /* WALLY_ABI_NO_ELEMENTS */
+    struct wally_map *signing_cache;
 };
 #endif /* SWIG */
 
@@ -280,7 +288,7 @@ WALLY_CORE_API int wally_psbt_input_set_keypaths(
  * .. note:: This function only finds non-taproot keypaths.
  */
 WALLY_CORE_API int wally_psbt_input_find_keypath(
-    struct wally_psbt_input *input,
+    const struct wally_psbt_input *input,
     const unsigned char *pub_key,
     size_t pub_key_len,
     size_t *written);
@@ -352,6 +360,18 @@ WALLY_CORE_API int wally_psbt_input_set_taproot_signature(
     size_t tap_sig_len);
 
 /**
+ * Set the taproot internal public key in an input.
+ *
+ * :param input: The input to update.
+ * :param pub_key: The x-only internal public key for this input.
+ * :param pub_key_len: The length of ``pub_key`` in bytes. Must be `EC_XONLY_PUBLIC_KEY_LEN`.
+ */
+WALLY_CORE_API int wally_psbt_input_set_taproot_internal_key(
+    struct wally_psbt_input *input,
+    const unsigned char *pub_key,
+    size_t pub_key_len);
+
+/**
  * Find a partial signature matching a pubkey in an input.
  *
  * :param input: The input to search in.
@@ -361,7 +381,7 @@ WALLY_CORE_API int wally_psbt_input_set_taproot_signature(
  *|    the index of the item plus one.
  */
 WALLY_CORE_API int wally_psbt_input_find_signature(
-    struct wally_psbt_input *input,
+    const struct wally_psbt_input *input,
     const unsigned char *pub_key,
     size_t pub_key_len,
     size_t *written);
@@ -402,7 +422,7 @@ WALLY_CORE_API int wally_psbt_input_set_unknowns(
  *|    the index of the item plus one.
  */
 WALLY_CORE_API int wally_psbt_input_find_unknown(
-    struct wally_psbt_input *input,
+    const struct wally_psbt_input *input,
     const unsigned char *key,
     size_t key_len,
     size_t *written);
@@ -453,7 +473,7 @@ WALLY_CORE_API int wally_psbt_input_set_required_lockheight(
 WALLY_CORE_API int wally_psbt_input_clear_required_lockheight(
     struct wally_psbt_input *input);
 
-#ifdef BUILD_ELEMENTS
+#ifndef WALLY_ABI_NO_ELEMENTS
 /**
  * Set the unblinded amount in an input.
  *
@@ -738,8 +758,7 @@ WALLY_CORE_API int wally_psbt_input_get_pegin_genesis_blockhash_len(
  *
  * :param input: The input to update.
  * :param genesis_blockhash: The peg-in genesis blockhash.
- * :param genesis_blockhash_len: Size of ``genesis_blockhash`` in bytes. Must
- *|    be `WALLY_TXHASH_LEN`.
+ * :param genesis_blockhash_len: Size of ``genesis_blockhash`` in bytes. Must be `SHA256_LEN`.
  */
 WALLY_CORE_API int wally_psbt_input_set_pegin_genesis_blockhash(
     struct wally_psbt_input *input,
@@ -1227,7 +1246,7 @@ WALLY_CORE_API int wally_psbt_input_clear_utxo_rangeproof(
     struct wally_psbt_input *input);
 
 /**
- * Generate explicit proofs and unblinded values from an inputs witness UTXO.
+ * Generate explicit proofs and unblinded values from an inputs UTXO.
  *
  * :param input: The input to generate proofs for.
  * :param satoshi: The explicit value of the input.
@@ -1242,6 +1261,9 @@ WALLY_CORE_API int wally_psbt_input_clear_utxo_rangeproof(
  *
  * .. note:: This function exposes the unblinded asset and value in the PSET,
  *           which is only appropriate in certain multi-party protocols.
+ * .. note:: This function can only be called on v2 PSETs. It is strongly
+ *           recommended to use `wally_psbt_generate_input_explicit_proofs`
+ *           which ensures this, instead of this function.
  */
 WALLY_CORE_API int wally_psbt_input_generate_explicit_proofs(
     struct wally_psbt_input *input,
@@ -1254,7 +1276,7 @@ WALLY_CORE_API int wally_psbt_input_generate_explicit_proofs(
     size_t vbf_len,
     const unsigned char *entropy,
     size_t entropy_len);
-#endif /* BUILD_ELEMENTS */
+#endif /* WALLY_ABI_NO_ELEMENTS */
 
 /**
  * Determine if a PSBT input is finalized.
@@ -1312,7 +1334,7 @@ WALLY_CORE_API int wally_psbt_output_set_keypaths(
  * .. note:: This function only finds non-taproot keypaths.
  */
 WALLY_CORE_API int wally_psbt_output_find_keypath(
-    struct wally_psbt_output *output,
+    const struct wally_psbt_output *output,
     const unsigned char *pub_key,
     size_t pub_key_len,
     size_t *written);
@@ -1381,7 +1403,7 @@ WALLY_CORE_API int wally_psbt_output_set_unknowns(
  *|    the index of the item plus one.
  */
 WALLY_CORE_API int wally_psbt_output_find_unknown(
-    struct wally_psbt_output *output,
+    const struct wally_psbt_output *output,
     const unsigned char *key,
     size_t key_len,
     size_t *written);
@@ -1416,7 +1438,20 @@ WALLY_CORE_API int wally_psbt_output_set_script(
     const unsigned char *script,
     size_t script_len);
 
-#ifdef BUILD_ELEMENTS
+/**
+ * Set the taproot internal public key in an output.
+ *
+ * :param output: The output to update.
+ * :param pub_key: The x-only internal public key for this output.
+ * :param pub_key_len: The length of ``pub_key`` in bytes. Must be `EC_XONLY_PUBLIC_KEY_LEN`.
+ */
+WALLY_CORE_API int wally_psbt_output_set_taproot_internal_key(
+    struct wally_psbt_output *output,
+    const unsigned char *pub_key,
+    size_t pub_key_len);
+
+
+#ifndef WALLY_ABI_NO_ELEMENTS
 /**
  * Set the input blinder index in an output.
  *
@@ -1875,7 +1910,7 @@ WALLY_CORE_API int wally_psbt_output_get_blinding_status(
     const struct wally_psbt_output *output,
     uint32_t flags,
     size_t *written);
-#endif /* BUILD_ELEMENTS */
+#endif /* WALLY_ABI_NO_ELEMENTS */
 
 /**
  * Allocate and initialize a new PSBT.
@@ -1884,8 +1919,8 @@ WALLY_CORE_API int wally_psbt_output_get_blinding_status(
  * :param inputs_allocation_len: The number of inputs to pre-allocate space for.
  * :param outputs_allocation_len: The number of outputs to pre-allocate space for.
  * :param global_unknowns_allocation_len: The number of global unknowns to allocate space for.
- * :param flags: Flags controlling psbt creation. Must be 0 or WALLY_PSBT_INIT_PSET.
- * :param output: Destination for the resulting PSBT output.
+ * :param flags: Flags controlling psbt creation. Must be 0 or `WALLY_PSBT_INIT_PSET`.
+ * :param output: Destination for the resulting PSBT.
  */
 WALLY_CORE_API int wally_psbt_init_alloc(
     uint32_t version,
@@ -1959,6 +1994,18 @@ WALLY_CORE_API int wally_psbt_is_finalized(
     size_t *written);
 
 /**
+ * Determine if a given PSBT input is finalized.
+ *
+ * :param psbt: The PSBT to check.
+ * :param index: The zero-based index of the input to check.
+ * :param written: On success, set to one if the input is finalized, otherwise zero.
+ */
+WALLY_CORE_API int wally_psbt_is_input_finalized(
+    const struct wally_psbt *psbt,
+    size_t index,
+    size_t *written);
+
+/**
  * Set the global transaction for a PSBT.
  *
  * :param psbt: The PSBT to set the transaction for.
@@ -2025,7 +2072,7 @@ WALLY_CORE_API int wally_psbt_set_tx_modifiable_flags(
     struct wally_psbt *psbt,
     uint32_t flags);
 
-#ifdef BUILD_ELEMENTS
+#ifndef WALLY_ABI_NO_ELEMENTS
 /**
  * Set the scalar offsets in a PSBT.
  *
@@ -2072,7 +2119,86 @@ WALLY_CORE_API int wally_psbt_find_global_scalar(
 WALLY_CORE_API int wally_psbt_set_pset_modifiable_flags(
     struct wally_psbt *psbt,
     uint32_t flags);
-#endif /* BUILD_ELEMENTS */
+
+/**
+ * Set the global genesis blockhash in a PSBT.
+ *
+ * :param psbt: The psbt to update. Must be a PSET.
+ * :param genesis_blockhash: The genesis blockhash.
+ * :param genesis_blockhash_len: Size of ``genesis_blockhash`` in bytes. Must be `SHA256_LEN`.
+ */
+WALLY_CORE_API int wally_psbt_set_global_genesis_blockhash(
+    struct wally_psbt *psbt,
+    const unsigned char *genesis_blockhash,
+    size_t genesis_blockhash_len);
+
+/**
+ * Determine if a PSBT contains a global genesis blockhash.
+ *
+ * :param psbt: The psbt to check. Must be a PSET.
+ * :param written: On success, set to zero if no genesis blockhash is present,
+ *|    otherwise set to one.
+ */
+WALLY_CORE_API int wally_psbt_has_global_genesis_blockhash(
+    struct wally_psbt *psbt,
+    size_t *written);
+
+/**
+ * Get the global genesis blockhash from a PSBT.
+ *
+ * :param psbt: The psbt to get the genesis blockhash from.
+ * :param bytes_out: Destination for the genesis blockhash.
+ * MAX_SIZED_OUTPUT(len, bytes_out, SHA256_LEN)
+ * :param written: Destination for the number of bytes written to ``bytes_out``.
+ *| Will be zero if the value is not present.
+ */
+WALLY_CORE_API int wally_psbt_get_global_genesis_blockhash(
+    struct wally_psbt *psbt,
+    unsigned char *bytes_out,
+    size_t len,
+    size_t *written);
+
+#endif /* WALLY_ABI_NO_ELEMENTS */
+
+/**
+ * Find the index of the PSBT input that spends a given UTXO.
+ *
+ * :param psbt: The PSBT to find in.
+ * :param txhash: The transaction hash of the UTXO to search for.
+ * :param txhash_len: Size of ``txhash`` in bytes. Must be `WALLY_TXHASH_LEN`.
+ * :param utxo_index: The zero-based index of the transaction output in ``txhash`` to
+ *|     search for.
+ * :param written: On success, set to zero if no matching input is found, otherwise
+ *|    the index of the matching input plus one.
+ */
+WALLY_CORE_API int wally_psbt_find_input_spending_utxo(
+    const struct wally_psbt *psbt,
+    const unsigned char *txhash,
+    size_t txhash_len,
+    uint32_t utxo_index,
+    size_t *written);
+
+/**
+ * Add a keypath to a given PSBT input.
+ *
+ * :param psbt: The PSBT to add the keypath to.
+ * :param index: The zero-based index of the input to add to.
+ * :param pub_key: The pubkey to add.
+ * :param pub_key_len: Length of ``pub_key`` in bytes. Must be `EC_PUBLIC_KEY_UNCOMPRESSED_LEN` or `EC_PUBLIC_KEY_LEN`.
+ * :param fingerprint: The master key fingerprint for the pubkey.
+ * :param fingerprint_len: Length of ``fingerprint`` in bytes. Must be `BIP32_KEY_FINGERPRINT_LEN`.
+ * :param child_path: The BIP32 derivation path for the pubkey.
+ * :param child_path_len: The number of items in ``child_path``.
+ */
+WALLY_CORE_API int wally_psbt_add_input_keypath(
+    struct wally_psbt *psbt,
+    uint32_t index,
+    const unsigned char *pub_key,
+    size_t pub_key_len,
+    const unsigned char *fingerprint,
+    size_t fingerprint_len,
+    const uint32_t *child_path,
+    size_t child_path_len);
 
 /**
  * Add a taproot keypath to a given PSBT input.
@@ -2164,7 +2290,7 @@ WALLY_CORE_API int wally_psbt_get_input_signing_script_len(
  * :param psbt: The PSBT containing the input to get from.
  * :param index: The zero-based index of the input to get the script from.
  * :param bytes_out: Destination for the scriptPubKey or redeem script.
- * :param len: Length of ``bytes`` in bytes.
+ * :param len: Length of ``bytes_out`` in bytes.
  * :param written: Destination for the number of bytes written to bytes_out.
  */
 WALLY_CORE_API int wally_psbt_get_input_signing_script(
@@ -2198,7 +2324,7 @@ WALLY_CORE_API int wally_psbt_get_input_scriptcode_len(
  * :param script: scriptPubKey/redeem script from `wally_psbt_get_input_signing_script`.
  * :param script_len: Length of ``script`` in bytes.
  * :param bytes_out: Destination for the scriptCode.
- * :param len: Length of ``bytes`` in bytes.
+ * :param len: Length of ``bytes_out`` in bytes.
  * :param written: Destination for the number of bytes written to bytes_out.
  */
 WALLY_CORE_API int wally_psbt_get_input_scriptcode(
@@ -2231,6 +2357,28 @@ WALLY_CORE_API int wally_psbt_get_input_signature_hash(
     uint32_t flags,
     unsigned char *bytes_out,
     size_t len);
+
+/**
+ * Add a keypath to a given PSBT output.
+ *
+ * :param psbt: The PSBT to add the keypath to.
+ * :param index: The zero-based index of the output to add to.
+ * :param pub_key: The pubkey to add.
+ * :param pub_key_len: Length of ``pub_key`` in bytes. Must be `EC_PUBLIC_KEY_UNCOMPRESSED_LEN` or `EC_PUBLIC_KEY_LEN`.
+ * :param fingerprint: The master key fingerprint for the pubkey.
+ * :param fingerprint_len: Length of ``fingerprint`` in bytes. Must be `BIP32_KEY_FINGERPRINT_LEN`.
+ * :param child_path: The BIP32 derivation path for the pubkey.
+ * :param child_path_len: The number of items in ``child_path``.
+ */
+WALLY_CORE_API int wally_psbt_add_output_keypath(
+    struct wally_psbt *psbt,
+    uint32_t index,
+    const unsigned char *pub_key,
+    size_t pub_key_len,
+    const unsigned char *fingerprint,
+    size_t fingerprint_len,
+    const uint32_t *child_path,
+    size_t child_path_len);
 
 /**
  * Add a taproot keypath to a given PSBT output.
@@ -2316,7 +2464,7 @@ WALLY_CORE_API int wally_psbt_get_length(
  * :param psbt: the PSBT to serialize.
  * :param flags: Flags controlling serialization. Must be 0.
  * :param bytes_out: Destination for the serialized PSBT.
- * :param len: Length of ``bytes`` in bytes (use `wally_psbt_get_length`).
+ * :param len: Length of ``bytes_out`` in bytes (use `wally_psbt_get_length`).
  * :param written: number of bytes written to bytes_out.
  */
 WALLY_CORE_API int wally_psbt_to_bytes(
@@ -2327,14 +2475,25 @@ WALLY_CORE_API int wally_psbt_to_bytes(
     size_t *written);
 
 /**
- * Create a PSBT from its serialized base64 string.
+ * Create a PSBT from a serialized base64 string.
  *
- * :param base64: Base64 string to create the PSBT from.
+ * :param str_in: Base64 string to create the PSBT from.
  * :param flags: `WALLY_PSBT_PARSE_FLAG_STRICT` or 0.
  * :param output: Destination for the resulting PSBT.
  */
 WALLY_CORE_API int wally_psbt_from_base64(
-    const char *base64,
+    const char *str_in,
+    uint32_t flags,
+    struct wally_psbt **output);
+
+/**
+ * Create a PSBT from a known-length serialized base64 string.
+ *
+ * See `wally_psbt_from_base64`.
+ */
+WALLY_CORE_API int wally_psbt_from_base64_n(
+    const char *str_in,
+    size_t str_len,
     uint32_t flags,
     struct wally_psbt **output);
 
@@ -2351,6 +2510,23 @@ WALLY_CORE_API int wally_psbt_to_base64(
     char **output);
 
 /**
+ * Create a PSBT from an existing transaction.
+ *
+ * :param tx: The transaction to create the PSBT from.
+ * :param version: The PSBT version to create. Must be ``WALLY_PSBT_VERSION_0`` or ``WALLY_PSBT_VERSION_2``.
+ * :param flags: Flags controlling psbt creation. Must be 0 or `WALLY_PSBT_INIT_PSET`.
+ * :param output: Destination for the resulting PSBT.
+ *
+ * .. note:: Any input scriptSigs and witnesses from the transaction's inputs
+ *|    are ignored when creating the PSBT.
+ */
+WALLY_CORE_API int wally_psbt_from_tx(
+    const struct wally_tx *tx,
+    uint32_t version,
+    uint32_t flags,
+    struct wally_psbt **output);
+
+/**
  * Combine the metadata from a source PSBT into another PSBT.
  *
  * :param psbt: the PSBT to combine into.
@@ -2358,6 +2534,18 @@ WALLY_CORE_API int wally_psbt_to_base64(
  */
 WALLY_CORE_API int wally_psbt_combine(
     struct wally_psbt *psbt,
+    const struct wally_psbt *source);
+
+/**
+ * Combine the metadata from a source PSBT into another PSBT.
+ *
+ * :param psbt: the PSBT to combine into.
+ * :param flags: Flags controlling combining. Must be 0 or `WALLY_PSBT_COMBINE_SIGS`.
+ * :param source: the PSBT to copy data from.
+ */
+WALLY_CORE_API int wally_psbt_combine_ex(
+    struct wally_psbt *psbt,
+    uint32_t flags,
     const struct wally_psbt *source);
 
 /**
@@ -2372,6 +2560,7 @@ WALLY_CORE_API int wally_psbt_clone_alloc(
     uint32_t flags,
     struct wally_psbt **output);
 
+#ifndef WALLY_ABI_NO_ELEMENTS
 /**
  * Blind a PSBT.
  *
@@ -2417,6 +2606,37 @@ WALLY_CORE_API int wally_psbt_blind_alloc(
     uint32_t output_index,
     uint32_t flags,
     struct wally_map **output);
+#endif /* WALLY_ABI_NO_ELEMENTS */
+
+/**
+ * Enable caching of intermediate data when signing a PSBT.
+ *
+ * This function should be called just before signing a PSBT or the first
+ * input being signed, or before computing a signature hash for the PSBT.
+ * If the PSBT is modified in a way that would affect the signatures produced,
+ * this function should be called again to ensure that old cached data is
+ * purged before signing again.
+ *
+ * :param psbt: PSBT to enable the signing cache for. Directly modifies this PSBT.
+ * :param flags: Flags controlling the signing cache. Must be 0.
+ *
+ * .. note:: The signing cache is local to the given PSBT and is not
+ *|    serialized with it.
+ */
+WALLY_CORE_API int wally_psbt_signing_cache_enable(
+    struct wally_psbt *psbt,
+    uint32_t flags);
+
+/**
+ * Disable caching of intermediate data when signing a PSBT.
+ *
+ * This function can be called at any time to ensure that the PSBT signing
+ * cache data is not reused when signing again.
+ *
+ * :param psbt: PSBT to disable the signing cache for. Directly modifies this PSBT.
+ */
+WALLY_CORE_API int wally_psbt_signing_cache_disable(
+    struct wally_psbt *psbt);
 
 /**
  * Sign PSBT inputs corresponding to a given private key.
@@ -2440,7 +2660,9 @@ WALLY_CORE_API int wally_psbt_sign(
  *
  * :param psbt: PSBT to sign. Directly modifies this PSBT.
  * :param hdkey: The parent extended key to derive signing keys from.
- * :param flags: Flags controlling signing. Must be 0 or EC_FLAG_GRIND_R.
+ * :param flags: Flags controlling signing. Must be 0 or `EC_FLAG_GRIND_R`.
+ *|     Note that unlike `wally_psbt_sign_input_bip32`, `EC_FLAG_ELEMENTS`
+ *|     is determined automatically and should not included in ``flags``.
  *
  * .. note:: See https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki#simple-signer-algorithm
  *|    for a description of the signing algorithm.
@@ -2459,7 +2681,8 @@ WALLY_CORE_API int wally_psbt_sign_bip32(
  * :param txhash: The signature hash to sign, from `wally_psbt_get_input_signature_hash`.
  * :param txhash_len: Size of ``txhash`` in bytes. Must be `WALLY_TXHASH_LEN`.
  * :param hdkey: The derived extended key to sign with.
- * :param flags: Flags controlling signing. Must be 0 or EC_FLAG_GRIND_R.
+ * :param flags: Flags controlling signing. Must be 0 or `EC_FLAG_GRIND_R`,
+ *|    logical or-d with `EC_FLAG_ELEMENTS` if ``psbt`` is a PSET.
  */
 WALLY_CORE_API int wally_psbt_sign_input_bip32(
     struct wally_psbt *psbt,
@@ -2501,10 +2724,10 @@ WALLY_CORE_API int wally_psbt_finalize_input(
     uint32_t flags);
 
 /**
- * Extract a network transaction from a finalized PSBT.
+ * Extract a network transaction from a partially or fully finalized PSBT.
  *
  * :param psbt: PSBT to extract from.
- * :param flags: Flags controlling signing. Must be 0 or `WALLY_PSBT_EXTRACT_NON_FINAL`.
+ * :param flags: :ref:`psbt-extract` controlling extraction.
  * :param output: Destination for the resulting transaction.
  */
 WALLY_CORE_API int wally_psbt_extract(

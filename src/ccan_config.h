@@ -1,4 +1,8 @@
+#ifndef _WALLY_CCAN_CONFIG_H_
+#define _WALLY_CCAN_CONFIG_H_ 1
+
 /* Config directives for ccan */
+
 #include <stddef.h>
 
 #ifdef WORDS_BIGENDIAN
@@ -28,11 +32,14 @@
 #define HAVE_BSWAP_64 0
 #endif
 
-#if defined(HAVE_UNALIGNED_ACCESS) && defined(__arm__)
-/* arm unaligned access is incomplete, in that e.g. byte swap instructions
- * can fault on unaligned addresses where a normal load/store would be fine.
- * Since the compiler can optimise some of our accesses into operations like
- * byte swaps, treat this platform as though it doesn't have unaligned access.
+#if defined(AVOID_UNALIGNED_ACCESS) || (defined(HAVE_UNALIGNED_ACCESS) && defined(__arm__))
+/* Disable unaligned access when:
+ * 1) Explicitly asked to via AVOID_UNALIGNED_ACCESS (e.g. for ubsan builds)
+ * 2) For arm builds where unaligned access is incomplete, in that e.g. byte
+ * swap instructions can fault on unaligned addresses where a normal load/store
+ * would be fine. Since the compiler can optimise some of our accesses into
+ * operations like byte swaps, treat this platform as though it doesn't have
+ * unaligned access.
  */
 #undef HAVE_UNALIGNED_ACCESS
 #define HAVE_UNALIGNED_ACCESS 0
@@ -55,3 +62,5 @@
 void wally_clear(void *p, size_t len);
 
 #define CCAN_CLEAR_MEMORY(p, len) wally_clear(p, len)
+
+#endif /*_WALLY_CCAN_CONFIG_H_ */

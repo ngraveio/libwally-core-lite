@@ -1,3 +1,10 @@
+SUBDIRS = secp256k1
+
+LIBSECP256K1 = secp256k1/libsecp256k1.la
+
+$(LIBSECP256K1): $(wildcard secp256k1/src/*) $(wildcard secp256k1/include/*)
+	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C $(@D) $(@F)
+
 noinst_LTLIBRARIES =
 
 include_HEADERS =
@@ -13,6 +20,7 @@ include_HEADERS += $(top_srcdir)/include/wally_psbt_members.h
 include_HEADERS += $(top_srcdir)/include/wally_script.h
 include_HEADERS += $(top_srcdir)/include/wally_symmetric.h
 include_HEADERS += $(top_srcdir)/include/wally_transaction.h
+include_HEADERS += $(top_srcdir)/include/wally_transaction_members.h
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = wallylite.pc
@@ -21,12 +29,12 @@ lib_LTLIBRARIES = libwallylite.la
 
 libwallylite_la_SOURCES = \
     address.c \
-    base58.c \
-    base64.c \
+    base_58.c \
+    base_64.c \
     bip32.c \
     bech32.c \
     blech32.c \
-    hex.c \
+    hex_.c \
     hmac.c \
     internal.c \
     map.c \
@@ -34,8 +42,10 @@ libwallylite_la_SOURCES = \
     psbt.c \
     pullpush.c \
     script.c \
+    sign.c \
     symmetric.c \
     transaction.c \
+    tx_io.c \
     wif.c \
     wordlist.c \
     ccan/ccan/base64/base64.c \
@@ -58,6 +68,6 @@ libwallylite_la_INCLUDES = \
 
 libwallylite_la_LDFLAGS = -no-undefined
 
-libwallylite_la_CFLAGS = -I$(top_srcdir) -I$(srcdir)/ccan -DWALLY_CORE_BUILD=1 $(AM_CFLAGS)
-libwallylite_la_LIBADD = $(noinst_LTLIBRARIES)
+libwallylite_la_CFLAGS = -I$(top_srcdir) -I$(srcdir)/ccan -I$(top_srcdir)/src/secp256k1/include -DWALLY_CORE_BUILD=1 $(AM_CFLAGS)
+libwallylite_la_LIBADD = $(LIBSECP256K1) $(noinst_LTLIBRARIES)
 

@@ -48,9 +48,29 @@ WALLY_CORE_API int wally_scrypt(
 #define AES_FLAG_DECRYPT  2 /** Decrypt */
 
 /**
+ * Get the length of encrypted/decrypted data using AES (ECB mode, no padding).
+ *
+ * :param key: Encryption/decryption key.
+ * :param key_len: Length of ``key`` in bytes. Must be one of the :ref:`aes-key-length`.
+ * :param bytes: Bytes to encrypt/decrypt.
+ * :param bytes_len: Length of ``bytes`` in bytes. Must be a multiple of `AES_BLOCK_LEN`.
+ * :param flags: :ref:`aes-operation-flag` indicating the desired behavior.
+ * :param written: Destination for the length of the encrypted/decrypted data.
+ *
+ * This function returns ``bytes_len`` assuming its arguments are valid.
+ */
+WALLY_CORE_API int wally_aes_len(
+    const unsigned char *key,
+    size_t key_len,
+    const unsigned char *bytes,
+    size_t bytes_len,
+    uint32_t flags,
+    size_t *written);
+
+/**
  * Encrypt/decrypt data using AES (ECB mode, no padding).
  *
- * :param key: Key material for initialisation.
+ * :param key: Encryption/decryption key.
  * :param key_len: Length of ``key`` in bytes. Must be one of the :ref:`aes-key-length`.
  * :param bytes: Bytes to encrypt/decrypt.
  * :param bytes_len: Length of ``bytes`` in bytes. Must be a multiple of `AES_BLOCK_LEN`.
@@ -68,11 +88,35 @@ WALLY_CORE_API int wally_aes(
     size_t len);
 
 /**
+ * Get the maximum length of encrypted/decrypted data using AES (CBC mode, PKCS#7 padding).
+ *
+ * :param key: Encryption/decryption key.
+ * :param key_len: Length of ``key`` in bytes. Must be one of the :ref:`aes-key-length`.
+ * :param iv: Initialization vector. For encryption this should be secure entropy. For
+ *|    decryption the bytes used when encrypting must be given.
+ * :param iv_len: Length of ``iv`` in bytes. Must be `AES_BLOCK_LEN`.
+ * :param bytes: Bytes to encrypt/decrypt.
+ * :param bytes_len: Length of ``bytes`` in bytes. Can be of any length for encryption, must be a multiple of `AES_BLOCK_LEN` for decryption.
+ * :param flags: :ref:`aes-operation-flag` indicating the desired behavior.
+ * :param written: Destination for the maximum length of the encrypted/decrypted data.
+ */
+WALLY_CORE_API int wally_aes_cbc_get_maximum_length(
+    const unsigned char *key,
+    size_t key_len,
+    const unsigned char *iv,
+    size_t iv_len,
+    const unsigned char *bytes,
+    size_t bytes_len,
+    uint32_t flags,
+    size_t *written);
+
+/**
  * Encrypt/decrypt data using AES (CBC mode, PKCS#7 padding).
  *
- * :param key: Key material for initialisation.
+ * :param key: Encryption/decryption key.
  * :param key_len: Length of ``key`` in bytes. Must be one of the :ref:`aes-key-length`.
- * :param iv: Initialisation vector.
+ * :param iv: Initialization vector. For encryption this should be secure entropy. For
+ *|    decryption the bytes used when encrypting must be given.
  * :param iv_len: Length of ``iv`` in bytes. Must be `AES_BLOCK_LEN`.
  * :param bytes: Bytes to encrypt/decrypt.
  * :param bytes_len: Length of ``bytes`` in bytes. Can be of any length for encryption, must be a multiple of `AES_BLOCK_LEN` for decryption.
@@ -316,10 +360,10 @@ WALLY_CORE_API int wally_pbkdf2_hmac_sha512(
 #define EC_SIGNATURE_LEN 64
 /** The length of a compact recoverable signature produced by EC signing */
 #define EC_SIGNATURE_RECOVERABLE_LEN 65
-/** The maximum encoded length of a DER encoded signature */
+/** The maximum encoded length of a DER signature (High-R, High-S), excluding sighash byte */
 #define EC_SIGNATURE_DER_MAX_LEN 72
-/** The maximum encoded length of a DER encoded signature created with `EC_FLAG_GRIND_R` */
-#define EC_SIGNATURE_DER_MAX_LOW_R_LEN 71
+/** The maximum encoded length of a DER signature created with `EC_FLAG_GRIND_R` (Low-R, Low-S), excluding sighash byte */
+#define EC_SIGNATURE_DER_MAX_LOW_R_LEN 70
 /** The length of a secp256k1 scalar value */
 #define EC_SCALAR_LEN 32
 
@@ -336,7 +380,7 @@ WALLY_CORE_API int wally_pbkdf2_hmac_sha512(
 #define EC_FLAG_ELEMENTS 0x10
 
 /* All defined flags */
-#define EC_FLAGS_ALL (0x1 | 0x2 | 0x4 | 0x8)
+#define EC_FLAGS_ALL (0x1 | 0x2 | 0x4 | 0x8 | 0x10)
 
 /**
  * Verify that a private key is valid.
@@ -383,7 +427,6 @@ WALLY_CORE_API int wally_ec_public_key_from_private_key(
     unsigned char *bytes_out,
     size_t len);
 
-#if 0 // Unsupported in wally-lite version
 /**
  * Create an uncompressed public key from a compressed public key.
  *
@@ -397,7 +440,6 @@ WALLY_CORE_API int wally_ec_public_key_decompress(
     size_t pub_key_len,
     unsigned char *bytes_out,
     size_t len);
-#endif
 
 /**
  * Negate a public key.
@@ -410,6 +452,24 @@ WALLY_CORE_API int wally_ec_public_key_decompress(
 WALLY_CORE_API int wally_ec_public_key_negate(
     const unsigned char *pub_key,
     size_t pub_key_len,
+    unsigned char *bytes_out,
+    size_t len);
+
+/**
+ * Tweak a public key.
+ *
+ * :param pub_key: The public key to tweak.
+ * :param pub_key_len: The length of ``pub_key`` in bytes. Must be `EC_PUBLIC_KEY_LEN`.
+ * :param tweak: The scalar/private key to tweak by.
+ * :param tweak_len: The length of ``tweak``. Must be `EC_PRIVATE_KEY_LEN`.
+ * :param bytes_out: Destination for the tweaked public key.
+ * FIXED_SIZED_OUTPUT(len, bytes_out, EC_PUBLIC_KEY_LEN)
+ */
+WALLY_CORE_API int wally_ec_public_key_tweak(
+    const unsigned char *pub_key,
+    size_t pub_key_len,
+    const unsigned char *tweak,
+    size_t tweak_len,
     unsigned char *bytes_out,
     size_t len);
 
@@ -851,6 +911,81 @@ WALLY_CORE_API int wally_s2c_commitment_verify(
     const unsigned char *s2c_opening,
     size_t s2c_opening_len,
     uint32_t flags);
+
+/**
+ * Get the maximum length of data encrypted/decrypted using `wally_aes_cbc_with_ecdh_key`.
+ *
+ * :param priv_key: The callers private key used for Diffie-Helman exchange.
+ * :param priv_key_len: The length of ``priv_key`` in bytes. Must be `EC_PRIVATE_KEY_LEN`.
+ * :param iv: Initialization vector. Only required when encrypting, otherwise pass NULL.
+ * :param iv_len: Length of ``iv`` in bytes. Must be `AES_BLOCK_LEN`.
+ * :param bytes: Bytes to encrypt/decrypt.
+ * :param bytes_len: Length of ``bytes`` in bytes.
+ * :param pub_key: The other parties public key used for Diffie-Helman exchange.
+ * :param pub_key_len: Length of ``pub_key`` in bytes. Must be `EC_PUBLIC_KEY_LEN`.
+ * :param label: A non-empty array of bytes for internal key generation. Must
+ *|    be the same (fixed) value when encrypting and decrypting.
+ * :param label_len: Length of ``label`` in bytes.
+ * :param flags: :ref:`aes-operation-flag` indicating the desired behavior.
+ * :param written: Destination for the maximum length of the encrypted/decrypted data.
+ */
+WALLY_CORE_API int wally_aes_cbc_with_ecdh_key_get_maximum_length(
+    const unsigned char *priv_key,
+    size_t priv_key_len,
+    const unsigned char *iv,
+    size_t iv_len,
+    const unsigned char *bytes,
+    size_t bytes_len,
+    const unsigned char *pub_key,
+    size_t pub_key_len,
+    const unsigned char *label,
+    size_t label_len,
+    uint32_t flags,
+    size_t *written);
+
+/**
+ * Encrypt/decrypt data using AES-256 (CBC mode, PKCS#7 padding) and a shared Diffie-Helman secret.
+ *
+ * :param priv_key: The callers private key used for Diffie-Helman exchange.
+ * :param priv_key_len: The length of ``priv_key`` in bytes. Must be `EC_PRIVATE_KEY_LEN`.
+ * :param iv: Initialization vector. Only required when encrypting, otherwise pass NULL.
+ * :param iv_len: Length of ``iv`` in bytes. Must be `AES_BLOCK_LEN` if encrypting otherwise 0.
+ * :param bytes: Bytes to encrypt/decrypt.
+ * :param bytes_len: Length of ``bytes`` in bytes.
+ * :param pub_key: The other parties public key used for Diffie-Helman exchange.
+ * :param pub_key_len: Length of ``pub_key`` in bytes. Must be `EC_PUBLIC_KEY_LEN`.
+ * :param label: A non-empty array of bytes for internal key generation. Must
+ *|    be the same (fixed) value when encrypting and decrypting.
+ * :param label_len: Length of ``label`` in bytes.
+ * :param flags: :ref:`aes-operation-flag` indicating the desired behavior.
+ * :param bytes_out: Destination for the encrypted/decrypted data.
+ * :param len: The length of ``bytes_out`` in bytes.
+ * :param written: Destination for the number of bytes written to ``bytes_out``.
+ *
+ * This function implements a scheme for sharing data using a derived secret.
+ * Alice creates an ephemeral key pair and sends her public key to Bob along
+ * with any request details. Bob creates an ephemeral key pair and calls this
+ * function with his private key and Alices public key to encrypt ``bytes``
+ * (the request payload). Bob returns his public key and the encrypted data to
+ * Alice, who calls this function with her private key and Bobs public key
+ * to decrypt and authenticate the payload. The ``label`` parameter must be
+ * be the same for both Alice and Bob for a given request/response.
+ */
+WALLY_CORE_API int wally_aes_cbc_with_ecdh_key(
+    const unsigned char *priv_key,
+    size_t priv_key_len,
+    const unsigned char *iv,
+    size_t iv_len,
+    const unsigned char *bytes,
+    size_t bytes_len,
+    const unsigned char *pub_key,
+    size_t pub_key_len,
+    const unsigned char *label,
+    size_t label_len,
+    uint32_t flags,
+    unsigned char *bytes_out,
+    size_t len,
+    size_t *written);
 
 #ifdef __cplusplus
 }

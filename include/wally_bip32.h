@@ -90,9 +90,9 @@ struct ext_key {
     unsigned char pad2[3];
     /** The public key with prefix byte 0x2 or 0x3 */
     unsigned char pub_key[33];
-#ifdef BUILD_ELEMENTS
+#ifndef WALLY_ABI_NO_ELEMENTS
     unsigned char pub_key_tweak_sum[32];
-#endif /* BUILD_ELEMENTS */
+#endif /* WALLY_ABI_NO_ELEMENTS */
 };
 #endif /* SWIG */
 
@@ -360,7 +360,7 @@ WALLY_CORE_API int bip32_key_from_parent_path_str_n_alloc(
     uint32_t flags,
     struct ext_key **output);
 
-#ifdef BUILD_ELEMENTS
+#ifndef WALLY_ABI_NO_ELEMENTS
 /**
  * Derive the pub tweak from a parent extended key and a path.
  *
@@ -387,7 +387,7 @@ WALLY_CORE_API int bip32_key_with_tweak_from_parent_path_alloc(
     size_t child_path_len,
     uint32_t flags,
     struct ext_key **output);
-#endif /* BUILD_ELEMENTS */
+#endif /* WALLY_ABI_NO_ELEMENTS */
 
 /**
  * Convert an extended key to base58.
@@ -466,6 +466,22 @@ WALLY_CORE_API int bip32_key_get_fingerprint(
     size_t len);
 
 /**
+ * Get the number of child path elements in a BIP32 path string.
+ *
+ * :param path_str: The BIP32 path string of child numbers to convert from.
+ * :param child_num: The child number to use if ``path_str`` contains a ``*`` wildcard.
+ * :param multi_index: The multi-path item to use if ``path_str`` contains a ``<>`` multi-path.
+ * :param flags: :ref:`bip32-flags` controlling path parsing behaviour.
+ * :param written: Destination for the number of path elements in the path string.
+ */
+WALLY_CORE_API int bip32_path_from_str_len(
+    const char *path_str,
+    uint32_t child_num,
+    uint32_t multi_index,
+    uint32_t flags,
+    size_t *written);
+
+/**
  * Convert a BIP32 path string to a path.
  *
  * :param path_str: The BIP32 path string of child numbers to convert from.
@@ -482,7 +498,20 @@ WALLY_CORE_API int bip32_path_from_str(
     uint32_t multi_index,
     uint32_t flags,
     uint32_t *child_path_out,
-    uint32_t child_path_out_len,
+    size_t child_path_out_len,
+    size_t *written);
+
+/**
+ * Get the number of child path elements in a known-length BIP32 path string.
+ *
+ * See `bip32_path_from_str_len`.
+ */
+WALLY_CORE_API int bip32_path_from_str_n_len(
+    const char *path_str,
+    size_t path_str_len,
+    uint32_t child_num,
+    uint32_t multi_index,
+    uint32_t flags,
     size_t *written);
 
 /**
@@ -497,7 +526,7 @@ WALLY_CORE_API int bip32_path_from_str_n(
     uint32_t multi_index,
     uint32_t flags,
     uint32_t *child_path_out,
-    uint32_t child_path_out_len,
+    size_t child_path_out_len,
     size_t *written);
 
 /**

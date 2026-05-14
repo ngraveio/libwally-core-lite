@@ -5,6 +5,8 @@
 extern "C" {
 #endif
 
+struct ext_key;
+
 #ifdef SWIG
 struct wally_map;
 typedef void *wally_map_verify_fn_t;
@@ -331,7 +333,7 @@ WALLY_CORE_API int wally_map_combine(
 /**
  * Replace a maps contents with another map.
  *
- * :param map_in: the destination to combine into.
+ * :param map_in: the destination to assign to.
  * :param source: the source to copy items from.
  *
  * .. note:: If this call fails, ``map_in`` is left untouched.
@@ -359,6 +361,55 @@ WALLY_CORE_API int wally_map_find_bip32_public_key_from(
     const struct ext_key *hdkey,
     size_t *written);
 
+#ifndef SWIG
+/**
+ * Return a BIP32 derived private key matching the keypath of a parent in a map.
+ *
+ * :param map_in: The map to search for derived keys of ``hdkey`` in.
+ * :param index: The zero-based index of the item to start searching from.
+ * :param hdkey: The BIP32 parent private key to derive matches from.
+ * :param output: Destination for the resulting derived key. If a matching
+ *|    key is not found, ``output`` is zeroed.
+ * :param written: On success, set to zero if a matching derived key is
+ *|    not found, otherwise the index of the matching key plus one.
+ *
+ * .. note:: This function searches for keys in the map that are children
+ *|    of ``hdkey``. If one is found, the corresponding private extended key
+ *|    is derived from ``hdey`` into ``output`` and ``written`` is set
+ *|    to the index of the matching key plus one.
+ *|     If no key is found, ``*output`` is set to ``NULL`` and
+ *|    `WALLY_OK` is returned.
+ */
+WALLY_CORE_API int wally_map_keypath_get_bip32_key_from(
+    const struct wally_map *map_in,
+    size_t index,
+    const struct ext_key *hdkey,
+    struct ext_key *output,
+    size_t *written);
+
+/**
+ * Return a BIP32 derived public key matching the keypath of a parent in a map.
+ *
+ * :param map_in: The map to search for derived keys of ``hdkey`` in.
+ * :param index: The zero-based index of the item to start searching from.
+ * :param hdkey: The BIP32 parent private key to derive matches from.
+ * :param output: Destination for the resulting derived key. If a matching
+ *|    key is not found, ``output`` is zeroed.
+ * :param written: On success, set to zero if a matching derived key is
+ *|    not found, otherwise the index of the matching key plus one.
+ *
+ * .. note:: The public key equivalent of `wally_map_keypath_get_bip32_key_from`,
+ *|    however note that it requires a private extended key if the child path
+ *|    may contain hardend child indices.
+ */
+WALLY_CORE_API int wally_map_keypath_get_bip32_public_key_from(
+    const struct wally_map *map_in,
+    size_t index,
+    const struct ext_key *hdkey,
+    struct ext_key *output,
+    size_t *written);
+#endif /* SWIG */
+
 /**
  * Return a BIP32 derived key matching the keypath of a parent in a map.
  *
@@ -368,7 +419,7 @@ WALLY_CORE_API int wally_map_find_bip32_public_key_from(
  * :param output: Destination for the resulting derived key, if any.
  *
  * .. note:: This function searches for keys in the map that are children
- *|    of ``hdkey``. If one is found, the resulting privately derived key
+ *|    of ``hdkey``. If one is found, the corresponding privately derived key
  *|    is returned. If no key is found, ``*output`` is set to ``NULL`` and
  *|    `WALLY_OK` is returned.
  */
@@ -433,6 +484,16 @@ WALLY_CORE_API int wally_merkle_path_xonly_public_key_verify(
     size_t key_len,
     const unsigned char *val,
     size_t val_len);
+
+/**
+ * Verify a taproot control block as specified in BIP-0341.
+ *
+ * :param bytes: Control block bytes.
+ * :param bytes_len: Length of ``bytes`` in bytes. Must be at least `EC_XONLY_PUBLIC_KEY_LEN` + 1.
+ */
+WALLY_CORE_API int wally_bip341_control_block_verify(
+    const unsigned char *bytes,
+    size_t bytes_len);
 
 /**
  * Allocate and initialize a new BIP32 keypath map.

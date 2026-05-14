@@ -7,8 +7,6 @@
 extern "C" {
 #endif
 
-#ifdef BUILD_ELEMENTS
-
 #define ASSET_TAG_LEN 32 /** Length of an Asset Tag */
 
 #define BLINDING_FACTOR_LEN 32 /** Length of a Blinding Factor (or blinder) */
@@ -24,6 +22,7 @@ extern "C" {
 #define ASSET_SURJECTIONPROOF_MAX_LEN 162 /** Maximum length of a wally-produced Asset Surjection Proof */
 #define ASSET_EXPLICIT_SURJECTIONPROOF_LEN 67 /** Length of an Explicit Asset Surjection Proof */
 
+#ifndef WALLY_ABI_NO_ELEMENTS
 /**
  * Create an Asset Generator from an either an asset commitment or asset tag plus blinding factor.
  *
@@ -496,7 +495,7 @@ WALLY_CORE_API int wally_asset_blinding_key_from_seed(
     size_t len);
 
 /**
- * Generate a blinding private key for a scriptPubkey.
+ * Generate a blinding private key for a scriptPubkey from a SLIP-0077 master blinding key.
  *
  * :param bytes: A full master blinding key, e.g. from `wally_asset_blinding_key_from_seed`,
  *|    or a partial key of length `SHA256_LEN`, typically from the last half of the full key.
@@ -513,6 +512,70 @@ WALLY_CORE_API int wally_asset_blinding_key_to_ec_private_key(
     size_t script_len,
     unsigned char *bytes_out,
     size_t len);
+
+/**
+ * Generate a blinding public key for a scriptPubkey from a SLIP-0077 master blinding key.
+ *
+ * :param bytes: A full master blinding key, e.g. from `wally_asset_blinding_key_from_seed`,
+ *|    or a partial key of length `SHA256_LEN`, typically from the last half of the full key.
+ * :param bytes_len: Length of ``bytes``. Must be `HMAC_SHA512_LEN` or `SHA256_LEN`.
+ * :param script: The scriptPubkey for the confidential output address.
+ * :param script_len: Length of ``script``.
+ * :param bytes_out: Destination for the resulting blinding public key.
+ * FIXED_SIZED_OUTPUT(len, bytes_out, EC_PUBLIC_KEY_LEN)
+ */
+WALLY_CORE_API int wally_asset_blinding_key_to_ec_public_key(
+    const unsigned char *bytes,
+    size_t bytes_len,
+    const unsigned char *script,
+    size_t script_len,
+    unsigned char *bytes_out,
+    size_t len);
+
+/**
+ * Generate a blinding private key for a scriptPubkey from an ELIP-0150 blinding private key.
+ *
+ * :param bytes: An ELIP-0150 blinding private key ("View Key"), e.g. from a ct() descriptor.
+ * :param bytes_len: Length of ``bytes``. Must be `EC_PRIVATE_KEY_LEN`.
+ * :param script: The scriptPubkey for the confidential output address.
+ * :param script_len: Length of ``script``.
+ * :param bytes_out: Destination for the resulting blinding private key.
+ * FIXED_SIZED_OUTPUT(len, bytes_out, EC_PRIVATE_KEY_LEN)
+ */
+WALLY_CORE_API int wally_elip150_private_key_to_ec_private_key(
+    const unsigned char *bytes, size_t bytes_len,
+    const unsigned char *script, size_t script_len,
+    unsigned char *bytes_out, size_t len);
+
+/**
+ * Generate a blinding public key for a scriptPubkey from an ELIP-0150 blinding private key.
+ *
+ * :param bytes: An ELIP-0150 blinding private key ("View Key"), e.g. from a ct() descriptor.
+ * :param bytes_len: Length of ``bytes``. Must be `EC_PRIVATE_KEY_LEN`.
+ * :param script: The scriptPubkey for the confidential output address.
+ * :param script_len: Length of ``script``.
+ * :param bytes_out: Destination for the resulting blinding public key.
+ * FIXED_SIZED_OUTPUT(len, bytes_out, EC_PUBLIC_KEY_LEN)
+ */
+WALLY_CORE_API int wally_elip150_private_key_to_ec_public_key(
+    const unsigned char *bytes, size_t bytes_len,
+    const unsigned char *script, size_t script_len,
+    unsigned char *bytes_out, size_t len);
+
+/**
+ * Generate a blinding public key for a scriptPubkey from an ELIP-0150 blinding public key.
+ *
+ * :param bytes: An ELIP-0150 blinding public key, e.g. from a ct() descriptor.
+ * :param bytes_len: Length of ``bytes``. Must be `EC_PUBLIC_KEY_LEN`.
+ * :param script: The scriptPubkey for the confidential output address.
+ * :param script_len: Length of ``script``.
+ * :param bytes_out: Destination for the resulting blinding public key.
+ * FIXED_SIZED_OUTPUT(len, bytes_out, EC_PUBLIC_KEY_LEN)
+ */
+WALLY_CORE_API int wally_elip150_public_key_to_ec_public_key(
+    const unsigned char *bytes, size_t bytes_len,
+    const unsigned char *script, size_t script_len,
+    unsigned char *bytes_out, size_t len);
 
 #define WALLY_ABF_VBF_LEN 64
 
@@ -657,7 +720,7 @@ WALLY_CORE_API int wally_asset_pak_whitelistproof_len(
     size_t summed_key_len,
     size_t *written);
 
-#endif /* BUILD_ELEMENTS */
+#endif /* WALLY_ABI_NO_ELEMENTS */
 
 #ifdef __cplusplus
 }

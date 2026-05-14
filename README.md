@@ -5,7 +5,7 @@ for cryptocurrency wallets.
 
 Read the API documentation at https://wally.readthedocs.io.
 
-Note that library interfaces may change slightly while the library design matures. Please see the [CHANGES](./CHANGES.md) file to determine if the API has changed when upgrading.
+Please see the [CHANGES](./CHANGES.md) for change details (including ABI changes) when upgrading.
 
 Please report bugs and submit patches to [Our github repository](https://github.com/ElementsProject/libwally-core). If you wish to report a security issue, please read [Our security reporting guidelines](./SECURITY.md).
 
@@ -61,7 +61,7 @@ $ brew install swig
 ### configure options
 
 - `--enable-debug`. Enables debugging information and disables compiler
-   optimisations (default: no).
+   optimizations (default: no).
 - `--enable-minimal`. Minimises library size and memory requirements to target
    embedded or resource-constrained environments (default: no).
 - `--enable-asm`. Enables fast assembly language implementations where available.
@@ -79,22 +79,35 @@ $ brew install swig
 - `--enable-swig-java`. Enable the [SWIG](http://www.swig.org/) Java (JNI)
    interface. After building, see `src/swig_java/src/com/blockstream/libwally/Wally.java`
    for the Java interface definition (default: no).
-- `--enable-elements`. Enables support for [Elements](https://elementsproject.org/)
-   features, including [Liquid](https://blockstream.com/liquid/) support.
-- `--enabled-standard-secp`. Excludes support for features that are unavailable in
+- `--disable-elements`. Disables support for [Elements](https://elementsproject.org/)
+   features, including [Liquid](https://blockstream.com/liquid/) support. Elements
+   functions exported by the library will always return WALLY_ERROR (default: no).
+- `--disable-elements-abi`. Changes the exposed library ABI to completely remove Elements
+   structure members and exported functions. When configured, elements support must be
+   disabled and the user must define `WALLY_ABI_NO_ELEMENTS` before including all wally
+   header files. This option *must not be given if wally is being installed as a system/shared library*. (default: no).
+- `--enable-standard-secp`. Excludes support for features that are unavailable in
    the standard [libsecp256k1 library](https://github.com/bitcoin-core/secp256k1).
+- `--with-system-secp256k1=<package_name>`. Compile and link against a system-wide
+   install of libsecp256k1 instead of the in-tree submodule. (default: not enabled).
 - `--enable-mbed-tls`. Use mbed-tls hashing functions if available. This typically
-   results in faster hashing on embedded platforms such as STM32. Note that the user
-   must define `MBEDTLS_SHA256_ALT` and/or `SOC_SHA_SUPPORT_PARALLEL_ENG` matching the
-   SOC support when compiling the library. (default: no)
+   results in faster hashing via hardware on embedded platforms such as ESP32.
+   Note that the caller must ensure that ``sdkconfig.h`` and ``soc/soc_caps.h``
+   are available when compiling, e.g. by setting the `CFLAGS` environment variable
+   before calling configure. (default: no)
 - `--enable-coverage`. Enables code coverage (default: no) Note that you will
    need [lcov](http://ltp.sourceforge.net/coverage/lcov.php) installed to
    build with this option enabled and generate coverage reports.
 - `--disable-shared`. Disables building a shared library and builds a static
-  library instead.
-- `--disable-tests`. Disables building library tests.
+  library instead. (default: no)
+- `--disable-tests`. Disables building library tests. (default: no)
 - `--disable-clear-tests`. Disables just the test_clear test (required to pass
-  the test suite with some compilers).
+  the test suite with some compilers). (default: no)
+- `--enable-fuzzing`. Enables fuzzing support by compiling with
+  `-fsanitize=fuzzer-no-link` and builds fuzz targets. (default: no).
+- `--enable-address-sanitizer`. Enables the address sanitizer for detecting
+  memory errors. (default: no).
+- `--enable-ub-sanitizer`. Enables the undefined behavior sanitizer. (default: no).
 
 ### Recommended development configure options
 
@@ -109,34 +122,39 @@ installed.
 
 ### Python
 
-For non-development use, you can install wally with `pip` as follows:
+For non-development use, you can install wally from PyPI with `pip` as follows:
 
 ```
-pip install wallycore==0.9.0
+pip install wallycore==1.5.3
 ```
 
-For python development, you can build and install wally using:
+For development, you can build and install wally using:
 
 ```
 $ pip install .
 ```
 
-It is suggested you only install this way into a virtualenv while the library
-is under heavy development.
-
 If you wish to explicitly choose the python version to use, set the
-`PYTHON_VERSION` environment variable (to e.g. `3`, `3.7` etc) before
+`PYTHON_VERSION` environment variable (to e.g. `3.9`, `3.10` etc) before
 running `pip` or (when compiling manually) `./configure`.
 
 You can also install the binary [wally releases](https://github.com/ElementsProject/libwally-core/releases)
-using the released wheel files without having to compile the library, e.g.:
+using the released wheel files, for example if you don't wish to install from PyPI over the network:
 
 ```
-pip install wallycore-0.9.0-cp39-cp39m-linux_x86_64.whl
+pip install wallycore-<version_and_architecture>.whl
 ```
 
-The script `tools/build_python_manylinux_wheels.sh` builds the Linux release files
-and can be used as an example for your own python projects.
+Each wally release includes a signed `requirements.txt` file. It is strongly
+suggested that you verify and use this file when installing, with:
+
+```
+pip install --require-hashes -r requirements.txt
+```
+
+Doing so ensures that the wheel you install is the version you expect and an
+official build. This will detect, for example, if PyPI is hacked and a
+malicious wallycore package uploaded.
 
 ### Android
 
@@ -145,7 +163,7 @@ the Android NDK. The script `tools/android_helpers.sh` can be sourced from
 the shell or scripts to make it easier to produce builds:
 
 ```
-$ export ANDROID_NDK=/opt/android-ndk-r23b # r22 is the minimum supported version
+$ export ANDROID_NDK=/opt/android-ndk-r26b # r22 is the minimum supported version
 $ . ./tools/android_helpers.sh
 
 $ android_get_arch_list
@@ -178,18 +196,21 @@ $ source $HOME/emsdk/emsdk_env.sh
 # Optionally set the list of wally functions to export to wasm (default: all)
 $ export EXPORTED_FUNCTIONS="['_malloc','_free','_wally_init','_wally_cleanup',...]"
 
+# Optionally set emcc options, e.g. to build as an ES6 module:
+$ export EMCC_OPTIONS="-s EXPORT_ES6=1 -s MODULARIZE=1"
+
 # Build
-$ ./tools/build_wasm.sh [--enable-elements]
+$ ./tools/build_wasm.sh [--disable-elements]
 ```
 
 Note that emsdk v3.1.27 or later is required.
 
-The script `tools/build_wasm.sh` builds the `wallycore.html` example as well
-as the required `wallycore.js` and `wallycore.wasm` files, which can be used
-as an example for your own WebAssembly projects.
+The file `contrib/wally_js_example.html` is an example page using the
+`wallycore.js` and `wallycore.wasm` files, which can be used as an example
+for your own WebAssembly projects.
 
-Open `wallycore.html` in a browser via a webserver like [nginx](https://www.nginx.com/)
-or `python2 -m SimpleHTTPServer 8000` to run the example.
+Open `wally_js_example.html` in a browser via a webserver like [nginx](https://www.nginx.com/)
+or `python3 -m http.server` to run the example.
 
 ## Cleaning
 
@@ -237,7 +258,7 @@ To generate an HTML coverage report, install `lcov` and use:
 ```
 $ ./tools/cleanup.sh
 $ ./tools/autogen.sh
-$ ./configure --enable-debug --enable-export-all --enable-swig-python --enable-swig-java --enable-coverage --enable-elements
+$ ./configure --enable-debug --enable-export-all --enable-swig-python --enable-swig-java --enable-coverage
 $ make
 $ ./tools/coverage.sh clean
 $ make check

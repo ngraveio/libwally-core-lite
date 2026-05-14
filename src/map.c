@@ -252,14 +252,14 @@ int map_add(struct wally_map *map_in,
         struct wally_map_item *new_item = map_in->items + map_in->num_items;
 
         if (!key) {
-            /* Integer key */
-            if (new_item->key)
-                clear_and_free_bytes(&new_item->key, &new_item->key_len);
+            new_item->key = NULL; /* Integer key */
         } else if (!clone_bytes(&new_item->key, key, key_len))
             return WALLY_ENOMEM; /* Failed to allocate byte key */
         new_item->key_len = key_len;
 
-        if (val) {
+        if (!val) {
+            new_item->value = NULL;
+        } else {
             if (take_value)
                 new_item->value = (unsigned char *)val;
             else if (!clone_bytes(&new_item->value, val, val_len)) {
@@ -432,8 +432,6 @@ static bool map_contains_key_length(const struct wally_map *map_in,
 /*
  * BIP32 keypath helpers.
  */
-#if 0
-/* SECP256K1 exclude */
 int wally_map_find_bip32_public_key_from(const struct wally_map *map_in, size_t index,
                                          const struct ext_key *hdkey, size_t *written)
 {
@@ -465,17 +463,21 @@ int wally_map_find_bip32_public_key_from(const struct wally_map *map_in, size_t 
     return ret;
 }
 
-int wally_map_keypath_get_bip32_key_from_alloc(const struct wally_map *map_in,
-                                               size_t index, const struct ext_key *hdkey,
-                                               struct ext_key **output)
+int map_keypath_get_bip32_key_from(const struct wally_map *map_in,
+                                   size_t index, const struct ext_key *hdkey,
+                                   struct ext_key *output, uint32_t bip32_flags,
+                                   size_t *written)
 {
     uint32_t path[BIP32_PATH_MAX_LEN];
     struct ext_key derived;
     size_t i, path_len, idx = 0;
     int ret = WALLY_OK;
 
-    OUTPUT_CHECK;
-    if (!map_in || !hdkey)
+    if (written)
+        *written = 0;
+    if (output)
+        memset(output, 0, sizeof(*output));
+    if (!map_in || !hdkey || !written || !output)
         return WALLY_EINVAL;
 
     if (mem_is_zero(hdkey->chain_code, sizeof(hdkey->chain_code))) {
@@ -501,7 +503,7 @@ int wally_map_keypath_get_bip32_key_from_alloc(const struct wally_map *map_in,
             else {
                 /* Derive the key to use */
                 ret = bip32_key_from_parent_path(hdkey, path, path_len,
-                                                 BIP32_FLAG_KEY_PRIVATE, &derived);
+                                                 bip32_flags, &derived);
             }
             if (ret == WALLY_OK) {
                 /* Check the derived public key belongs to this item */
@@ -518,17 +520,50 @@ int wally_map_keypath_get_bip32_key_from_alloc(const struct wally_map *map_in,
         }
     }
     if (ret == WALLY_OK && idx) {
-        /* Found, return the matching key */
-        *output = wally_calloc(sizeof(struct ext_key));
-        if (!*output)
-            ret = WALLY_ENOMEM;
-        else
-            memcpy(*output, hdkey, sizeof(*hdkey));
+        /* Found, return the matching key and its 1-based index */
+        *written = idx;
+        memcpy(output, hdkey, sizeof(*hdkey));
     }
     wally_clear(&derived, sizeof(derived));
     return ret;
 }
-#endif
+
+int wally_map_keypath_get_bip32_key_from(const struct wally_map *map_in,
+                                         size_t index, const struct ext_key *hdkey,
+                                         struct ext_key *output, size_t *written)
+{
+    return map_keypath_get_bip32_key_from(map_in, index, hdkey,
+                                          output, BIP32_FLAG_KEY_PRIVATE, written);
+}
+
+int wally_map_keypath_get_bip32_public_key_from(const struct wally_map *map_in,
+                                                size_t index, const struct ext_key *hdkey,
+                                                struct ext_key *output, size_t *written)
+{
+    return map_keypath_get_bip32_key_from(map_in, index, hdkey,
+                                          output, BIP32_FLAG_KEY_PUBLIC, written);
+}
+
+int wally_map_keypath_get_bip32_key_from_alloc(const struct wally_map *map_in,
+                                               size_t index, const struct ext_key *hdkey,
+                                               struct ext_key **output)
+{
+    struct ext_key found;
+    size_t found_index;
+    int ret;
+
+    OUTPUT_CHECK;
+    ret = map_keypath_get_bip32_key_from(map_in, index, hdkey,
+                                         &found, BIP32_FLAG_KEY_PRIVATE, &found_index);
+    if (ret == WALLY_OK && found_index) {
+        if (!(*output = wally_calloc(sizeof(struct ext_key))))
+            ret = WALLY_ENOMEM;
+        else
+            memcpy(*output, &found, sizeof(found));
+    }
+    wally_clear(&found, sizeof(found));
+    return ret;
+}
 
 
 /*
@@ -541,8 +576,6 @@ static int keypath_key_verify(const unsigned char *key, size_t key_len, struct e
 {
     int ret = WALLY_EINVAL;
 
-#if 0
-/* SECP256K1 exclude */
     key_out->version = 0; /* If non-0 on return, we have a bip32 key */
 
     if (!key)
@@ -565,7 +598,6 @@ static int keypath_key_verify(const unsigned char *key, size_t key_len, struct e
             ret = WALLY_EINVAL; /* Must be a public key, not private */
         }
     }
-#endif
     return ret;
 }
 
@@ -636,9 +668,20 @@ int wally_merkle_path_xonly_public_key_verify(const unsigned char *key, size_t k
 
     if (key_len != EC_XONLY_PUBLIC_KEY_LEN ||
         keypath_key_verify(key, key_len, &extkey) != WALLY_OK ||
-        extkey.version || BYTES_INVALID(val, val_len) || val_len % SHA256_LEN != 0)
+        extkey.version || BYTES_INVALID(val, val_len))
+        return WALLY_EINVAL;
+    if (val_len && (val_len % SHA256_LEN || val_len % SHA256_LEN > 128u))
         return WALLY_EINVAL;
     return WALLY_OK;
+}
+
+int wally_bip341_control_block_verify(const unsigned char *bytes, size_t bytes_len)
+{
+    const size_t min_len = 1 + EC_XONLY_PUBLIC_KEY_LEN;
+    if (bytes_len < min_len)
+        return WALLY_EINVAL; /* Missing parity byte and/or x-only pubkey */
+    return wally_merkle_path_xonly_public_key_verify(bytes + 1, EC_XONLY_PUBLIC_KEY_LEN,
+            bytes_len == min_len ? NULL : bytes + min_len, bytes_len - min_len);
 }
 
 int wally_map_keypath_bip32_init_alloc(size_t allocation_len, struct wally_map **output)
@@ -696,7 +739,7 @@ int wally_map_merkle_path_add(struct wally_map *map_in,
 
     /* Add map for tap leaves */
     return map_add(map_in, pub_key, pub_key_len,
-                   merkle_hashes, merkle_hashes_len, false, false);
+                   merkle_hashes, merkle_hashes_len, false, true);
 }
 
 int wally_keypath_get_fingerprint(const unsigned char *val, size_t val_len,

@@ -27,7 +27,6 @@
 #include "script.h"
 
 #ifdef BUILD_ELEMENTS
-
 #define CHECKSUM_BLECH32 0x1
 #define CHECKSUM_BLECH32M 0x455972a3350f7a1ull
 
@@ -208,15 +207,20 @@ fail:
     wally_clear_2(data, sizeof(data), hrp_actual, sizeof(hrp_actual));
     return 0;
 }
+#endif /* BUILD_ELEMENTS */
 
+#ifndef WALLY_ABI_NO_ELEMENTS
 int wally_confidential_addr_to_addr_segwit(
     const char *address,
     const char *confidential_addr_family,
     const char *addr_family,
     char **output)
 {
+#ifndef BUILD_ELEMENTS
+    return WALLY_ERROR;
+#else
     unsigned char buf[WALLY_BLECH32_MAXLEN];
-    unsigned char *hash_bytes_p = &buf[EC_PUBLIC_KEY_LEN - 2];
+    unsigned char *p = &buf[EC_PUBLIC_KEY_LEN - 2];
     size_t written = 0;
     int ret;
     uint8_t witver;
@@ -233,14 +237,15 @@ int wally_confidential_addr_to_addr_segwit(
         ret = WALLY_EINVAL;
     else {
         written = written - EC_PUBLIC_KEY_LEN + 2;
-        hash_bytes_p[0] = value_to_op_n(witver);
-        hash_bytes_p[1] = (unsigned char) (written - 2);
-        ret = wally_addr_segwit_from_bytes(hash_bytes_p, written,
+        p[0] = value_to_op_n(witver);
+        p[1] = (unsigned char) (written - 2);
+        ret = wally_addr_segwit_from_bytes(p, written,
                                            addr_family, 0, output);
     }
 
     wally_clear(buf, sizeof(buf));
     return ret;
+#endif /* BUILD_ELEMENTS */
 }
 
 int wally_confidential_addr_segwit_to_ec_public_key(
@@ -249,6 +254,9 @@ int wally_confidential_addr_segwit_to_ec_public_key(
     unsigned char *bytes_out,
     size_t len)
 {
+#ifndef BUILD_ELEMENTS
+    return WALLY_ERROR;
+#else
     unsigned char buf[WALLY_BLECH32_MAXLEN];
     size_t written = 0;
     int ret = WALLY_OK;
@@ -266,6 +274,7 @@ int wally_confidential_addr_segwit_to_ec_public_key(
 
     wally_clear(buf, sizeof(buf));
     return ret;
+#endif /* BUILD_ELEMENTS */
 }
 
 int wally_confidential_addr_from_addr_segwit(
@@ -276,9 +285,12 @@ int wally_confidential_addr_from_addr_segwit(
     size_t pub_key_len,
     char **output)
 {
+#ifndef BUILD_ELEMENTS
+    return WALLY_ERROR;
+#else
     char result[WALLY_BLECH32_MAXLEN + 1];
     unsigned char buf[EC_PUBLIC_KEY_LEN + SHA256_LEN];
-    unsigned char *hash_bytes_p = &buf[EC_PUBLIC_KEY_LEN - 2];
+    unsigned char *p = &buf[EC_PUBLIC_KEY_LEN - 2];
     size_t written = SHA256_LEN + 2;
     int ret;
     size_t witver;
@@ -293,14 +305,14 @@ int wally_confidential_addr_from_addr_segwit(
 
     /* get witness program's script */
     ret = wally_addr_segwit_to_bytes(address, addr_family, 0,
-                                     hash_bytes_p, written, &written);
+                                     p, written, &written);
     if (ret == WALLY_OK) {
         if ((written != (HASH160_LEN + 2)) && (written != (SHA256_LEN + 2))) {
             ret = WALLY_EINVAL;
             goto done;
         }
 
-        if (!script_is_op_n(hash_bytes_p[0], true, &witver)) {
+        if (!script_is_op_n(p[0], true, &witver)) {
             ret = WALLY_EINVAL;
             goto done;
         }
@@ -309,8 +321,10 @@ int wally_confidential_addr_from_addr_segwit(
         memcpy(buf, pub_key, pub_key_len);
         written -= 2;   /* ignore witnessVersion & hashSize */
         written += EC_PUBLIC_KEY_LEN;
-        if (!blech32_addr_encode(result, confidential_addr_family, witver & 0xff, buf, written))
-            return WALLY_ERROR;
+        if (!blech32_addr_encode(result, confidential_addr_family, witver & 0xff, buf, written)) {
+            ret = WALLY_ERROR;
+            goto done;
+        }
 
         *output = wally_strdup(result);
         ret = (*output) ? WALLY_OK : WALLY_ENOMEM;
@@ -320,6 +334,6 @@ done:
     wally_clear(buf, sizeof(buf));
     wally_clear(result, sizeof(result));
     return ret;
-}
-
 #endif /* BUILD_ELEMENTS */
+}
+#endif /* WALLY_ABI_NO_ELEMENTS */

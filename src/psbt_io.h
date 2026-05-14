@@ -51,7 +51,8 @@
 /* Globals: PSET */
 #define PSET_GLOBAL_SCALAR 0x00
 #define PSET_GLOBAL_TX_MODIFIABLE 0x01
-#define PSET_GLOBAL_MAX PSET_GLOBAL_TX_MODIFIABLE
+#define PSET_GLOBAL_GENESIS_HASH 0x02
+#define PSET_GLOBAL_MAX PSET_GLOBAL_GENESIS_HASH
 
 /* Global PSBT/PSET fields that can be repeated */
 #define PSBT_GLOBAL_REPEATABLE (PSBT_FT(PSBT_GLOBAL_XPUB) | \
@@ -76,7 +77,8 @@
                                    PSBT_FT(PSBT_GLOBAL_OUTPUT_COUNT) | \
                                    PSBT_FT(PSBT_GLOBAL_TX_MODIFIABLE) | \
                                    PSET_FT(PSET_GLOBAL_SCALAR) | \
-                                   PSET_FT(PSET_GLOBAL_TX_MODIFIABLE))
+                                   PSET_FT(PSET_GLOBAL_TX_MODIFIABLE) | \
+                                   PSET_FT(PSET_GLOBAL_GENESIS_HASH))
 
 /* Global PSBT/PSET fields that must *not* be present in v2 */
 #define PSBT_GLOBAL_DISALLOWED_V2 PSBT_FT(PSBT_GLOBAL_UNSIGNED_TX)
@@ -193,7 +195,7 @@
 /* Input PSBT/PSET fields that must *not* be present in v2 */
 #define PSBT_IN_DISALLOWED_V2 ((uint64_t)0)
 
-/* Input PSET fields that are trivially mergable, i.e. can be
+/* Input PSET fields that are trivially mergeable, i.e. can be
  * copied when merging if missing the the destination input. */
 #define PSET_IN_MERGEABLE (PSET_FT(PSET_IN_ISSUANCE_VALUE_RANGEPROOF) | \
                            PSET_FT(PSET_IN_ISSUANCE_INFLATION_KEYS_RANGEPROOF) | \

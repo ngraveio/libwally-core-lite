@@ -28,6 +28,12 @@ extern "C" {
 #define WALLY_EINVAL -2 /** Invalid argument */
 #define WALLY_ENOMEM -3 /** malloc() failed */
 
+/** Library version */
+#define WALLY_MAJOR_VER 1
+#define WALLY_MINOR_VER 5
+#define WALLY_PATCH_VER 3
+#define WALLY_BUILD_VER 0x10503
+
 /**
  * Initialize wally.
  *
@@ -44,12 +50,68 @@ WALLY_CORE_API int wally_init(uint32_t flags);
  */
 WALLY_CORE_API int wally_cleanup(uint32_t flags);
 
+/**
+ * Get the version number of the library.
+ *
+ * :param value_out: Destination for the library build version. This is the
+ *|    value of `WALLY_BUILD_VER` when the library was compiled.
+ */
+WALLY_CORE_API int wally_get_build_version(
+    uint32_t *value_out);
+
 #ifndef SWIG
+/**
+ * Allocate memory using the configured library allocator.
+ *
+ * :param size: Size of the memory region to allocate in bytes.
+ *
+ * The allocated memory must be freed using `wally_free`.
+ */
+WALLY_CORE_API void *wally_malloc(size_t size);
+
+/**
+ * Allocate and zero memory using the configured library allocator.
+ *
+ * :param size: Size of the memory region to allocate in bytes.
+ *
+ * The allocated memory must be freed using `wally_free`.
+ */
+WALLY_CORE_API void *wally_calloc(size_t size);
+
+/**
+ * Free memory allocated from the configured library allocator.
+ *
+ * :param ptr: The memory region to free.
+ */
+WALLY_CORE_API void wally_free(void *ptr);
+
+/**
+ * Duplicate a known-length string using the configured library allocator.
+ *
+ * :param str: The string to duplicate.
+ * :param str_len: The length of ``str`` in bytes.
+ *
+ * This function appends a NUL terminator to the string.
+ * The allocated string must be freed using `wally_free`.
+ */
+WALLY_CORE_API char *wally_strdup_n(const char *str, size_t str_len);
+
+/**
+ * Duplicate a string using the configured library allocator.
+ *
+ * :param str: The string to duplicate.
+ * :param str_len: The length of ``str`` in bytes.
+ *
+ * This function appends a NUL terminator to the string.
+ * The allocated string must be freed using `wally_free`.
+ */
+WALLY_CORE_API char *wally_strdup(const char *str);
+
 /**
  * Fetch the wally internal secp256k1 context object.
  *
  * By default, a single global context is created on demand. This behaviour
- * can be overriden by providing a custom context fetching function when
+ * can be overridden by providing a custom context fetching function when
  * calling `wally_set_operations`.
  */
 WALLY_CORE_API struct secp256k1_context_struct *wally_get_secp_context(void);
@@ -101,7 +163,7 @@ WALLY_CORE_API int wally_free_string(
  *
  * The caller should call this function before using any functions that rely on
  * libsecp256k1 (i.e. Anything using public/private keys). If the caller
- * has overriden the library's default libsecp context fetching using
+ * has overridden the library's default libsecp context fetching using
  * `wally_set_operations`, then it may be necessary to call this function
  * before calling wally functions in each thread created by the caller.
  *
@@ -150,7 +212,7 @@ WALLY_CORE_API int wally_hex_from_bytes(
  * Convert a hexadecimal string to bytes.
  *
  * :param hex: String to convert.
- * :param bytes_out: Where to store the resulting bytes.
+ * :param bytes_out: Destination for the resulting bytes.
  * :param len: The length of ``bytes_out`` in bytes.
  * :param written: Destination for the number of bytes written to ``bytes_out``.
  */
@@ -289,6 +351,19 @@ WALLY_CORE_API int wally_base64_to_bytes(
     size_t *written);
 
 /**
+ * Decode a known-length base64 encoded string back into into binary data.
+ *
+ * See `wally_base64_to_bytes`.
+ */
+WALLY_CORE_API int wally_base64_n_to_bytes(
+    const char *str_in,
+    size_t str_len,
+    uint32_t flags,
+    unsigned char *bytes_out,
+    size_t len,
+    size_t *written);
+
+/**
  * Return the maximum length of a base64 encoded string once decoded into bytes.
  *
  * Since base64 strings may contain line breaks and padding, it is not
@@ -304,6 +379,17 @@ WALLY_CORE_API int wally_base64_to_bytes(
  */
 WALLY_CORE_API int wally_base64_get_maximum_length(
     const char *str_in,
+    uint32_t flags,
+    size_t *written);
+
+/**
+ * Return the maximum length of a known-length base64 encoded string once decoded into bytes.
+ *
+ * See `wally_base64_get_maximum_length`.
+ */
+WALLY_CORE_API int wally_base64_n_get_maximum_length(
+    const char *str_in,
+    size_t str_len,
     uint32_t flags,
     size_t *written);
 
@@ -335,6 +421,13 @@ typedef int (*wally_ec_nonce_t)(
 typedef struct secp256k1_context_struct *(*secp_context_t)(
     void);
 
+/** The type of an overridable function to get the last extended error code */
+typedef int (*wally_get_error_t)(void);
+
+/** The type of an overridable function to set the last extended error code */
+typedef int (*wally_set_error_t)(
+    int error_code);
+
 /** Structure holding function pointers for overridable wally operations */
 struct wally_operations {
     uintptr_t struct_size; /* Must be initialised to sizeof(wally_operations) */
@@ -343,9 +436,9 @@ struct wally_operations {
     wally_bzero_t bzero_fn;
     wally_ec_nonce_t ec_nonce_fn;
     secp_context_t secp_context_fn;
-    void *reserved_1; /* reserved_ pointers are reserved for future use */
-    void *reserved_2;
-    void *reserved_3;
+    wally_get_error_t get_error_fn;
+    wally_set_error_t set_error_fn;
+    void *reserved_3; /* reserved_ pointers are reserved for future use */
     void *reserved_4;
 };
 
