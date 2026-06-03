@@ -36,6 +36,13 @@
 static const uint8_t PSBT_MAGIC[5] = {'p', 's', 'b', 't', 0xff};
 static const uint8_t PSET_MAGIC[5] = {'p', 's', 'e', 't', 0xff};
 
+/* Zcash V4 Sapling constants */
+#define ZEC_V4_HEADER_BYTES {0x04, 0x00, 0x00, 0x80} /* 0x80000004 LE */
+#define ZEC_V4_HEADER_LEN 4
+#define ZEC_V4_VERSION_GROUP_ID 0x892F2085u
+
+static const uint8_t ZEC_V4_HEADER[ZEC_V4_HEADER_LEN] = ZEC_V4_HEADER_BYTES;
+
 #define MAX_INVALID_SATOSHI ((uint64_t) -1)
 /* Note we mask given indices regardless of PSBT/PSET, since enormous
  * indices can never be valid on BTC either */
@@ -2096,6 +2103,9 @@ static int pull_tx(const unsigned char **cursor, size_t *max,
     if (*tx_out)
         return WALLY_EINVAL; /* Duplicate */
     pull_subfield_start(cursor, max, pull_varint(cursor, max), &val, &val_len);
+    /* Auto-detect ZEC V4: header bytes 0x04 0x00 0x00 0x80 (= 0x80000004 LE) */
+    if (val_len >= ZEC_V4_HEADER_LEN && !memcmp(val, ZEC_V4_HEADER, ZEC_V4_HEADER_LEN))
+        tx_flags |= WALLY_TX_FLAG_ZEC_V4;
     ret = wally_tx_from_bytes(val, val_len, tx_flags, tx_out);
     pull_subfield_end(cursor, max, val, val_len);
     return ret;
@@ -2883,6 +2893,10 @@ static int push_length_and_tx(unsigned char **cursor, size_t *max,
     int ret;
     size_t tx_len;
     unsigned char *p;
+
+    /* Auto-detect ZEC V4 for serialization */
+    if (tx && tx->version_group_id == ZEC_V4_VERSION_GROUP_ID)
+        flags |= WALLY_TX_FLAG_ZEC_V4;
 
     if ((ret = wally_tx_get_length(tx, flags, &tx_len)) != WALLY_OK)
         return ret;

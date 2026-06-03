@@ -27,6 +27,7 @@ extern "C" {
 /* Note: This flag encodes/parses transactions that are ambiguous to decode.
    Unless you have a good reason to do so you will most likely not need it */
 #define WALLY_TX_FLAG_PRE_BIP144    0x8 /* Encode/Decode using pre-BIP 144 serialization */
+#define WALLY_TX_FLAG_ZEC_V4        0x10 /* Encode/Decode as a Zcash V4 Sapling transaction */
 
 #define WALLY_TX_FLAG_BLINDED_INITIAL_ISSUANCE 0x1
 
@@ -148,6 +149,8 @@ struct wally_tx_output {
 struct wally_tx {
     uint32_t version;
     uint32_t locktime;
+    uint32_t version_group_id; /* Zcash V4: nVersionGroupId (0x892F2085), else 0 */
+    uint32_t expiry_height;    /* Zcash V4: nExpiryHeight, else 0 */
     struct wally_tx_input *inputs;
     size_t num_inputs;
     size_t inputs_allocation_len;
