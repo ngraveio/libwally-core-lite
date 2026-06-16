@@ -1,4 +1,5 @@
 #include "internal.h"
+#include <stdio.h>
 
 #include <include/wally_elements.h>
 #include <include/wally_script.h>
@@ -37,11 +38,13 @@ static const uint8_t PSBT_MAGIC[5] = {'p', 's', 'b', 't', 0xff};
 static const uint8_t PSET_MAGIC[5] = {'p', 's', 'e', 't', 0xff};
 
 /* Zcash V4 Sapling constants */
-#define ZEC_V4_HEADER_BYTES {0x04, 0x00, 0x00, 0x80} /* 0x80000004 LE */
-#define ZEC_V4_HEADER_LEN 4
-#define ZEC_V4_VERSION_GROUP_ID 0x892F2085u
+static const uint32_t ZEC_V4_VERSION_GROUP_ID = 0x892F2085u;
+static const uint8_t  ZEC_V4_HEADER[] = {0x04, 0x00, 0x00, 0x80}; /* 0x80000004 LE */
+static const size_t   ZEC_V4_HEADER_LEN = sizeof(ZEC_V4_HEADER);
 
-static const uint8_t ZEC_V4_HEADER[ZEC_V4_HEADER_LEN] = ZEC_V4_HEADER_BYTES;
+/* PSBT proprietary key for Zcash consensus branch ID (BitGo convention): */
+static const uint8_t ZEC_PROP_KEY_BRANCH_ID[] = {0xFC, 0x05, 0x42, 0x49, 0x54, 0x47, 0x4F, 0x00};
+static const size_t  ZEC_PROP_KEY_BRANCH_ID_LEN = sizeof(ZEC_PROP_KEY_BRANCH_ID);
 
 #define MAX_INVALID_SATOSHI ((uint64_t) -1)
 /* Note we mask given indices regardless of PSBT/PSET, since enormous
@@ -2840,6 +2843,21 @@ unknown:
 
     if (ret == WALLY_OK && !*cursor)
         ret = WALLY_EINVAL; /* Ran out of data */
+
+    /* Extract Zcash consensus branch ID from proprietary keys if present */
+    if (ret == WALLY_OK) {
+        (*output)->branch_id = 0;
+        for (i = 0; i < (*output)->unknowns.num_items; i++) {
+            const struct wally_map_item *item = &(*output)->unknowns.items[i];
+            if (item->key_len == ZEC_PROP_KEY_BRANCH_ID_LEN &&
+                !memcmp(item->key, ZEC_PROP_KEY_BRANCH_ID, ZEC_PROP_KEY_BRANCH_ID_LEN) &&
+                item->value_len == 4) {
+
+                (*output)->branch_id = le32toh(*(const uint32_t *)item->value);
+                break;
+            }
+        }
+    }
 
     if (ret != WALLY_OK) {
         wally_psbt_free(*output);

@@ -139,6 +139,7 @@ struct wally_psbt {
     uint32_t fallback_locktime;
     uint32_t has_fallback_locktime;
     uint32_t tx_modifiable_flags;
+    uint32_t branch_id;
 #ifndef WALLY_ABI_NO_ELEMENTS
     struct wally_map global_scalars;
     uint32_t pset_modifiable_flags;
