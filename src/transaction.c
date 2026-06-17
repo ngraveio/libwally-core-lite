@@ -7,6 +7,7 @@
 #include <include/wally_transaction_members.h>
 #include <include/wally_map.h>
 #include <include/wally_script.h>
+#include <include/wally_zcash.h>
 
 #include <limits.h>
 #include "pullpush.h"
@@ -15,8 +16,8 @@
 
 #define WALLY_TX_ALL_FLAGS \
     (WALLY_TX_FLAG_USE_WITNESS | WALLY_TX_FLAG_USE_ELEMENTS | \
-     WALLY_TX_FLAG_ALLOW_PARTIAL | WALLY_TX_FLAG_PRE_BIP144 | \
-     WALLY_TX_FLAG_ZEC_V4)
+     WALLY_TX_FLAG_ALLOW_PARTIAL | WALLY_TX_FLAG_PRE_BIP144 \
+     ZEC_TX_FLAG) /* NGRAVE-ZEC: "| WALLY_TX_FLAG_ZEC_V4" under WALLY_ZCASH, else empty */
 
 /* We use the maximum DER sig length (plus a byte for the sighash) so that
  * we overestimate the size by a byte or two per tx sig. This allows using
@@ -1721,10 +1722,7 @@ static int tx_get_lengths(const struct wally_tx *tx,
         varint_get_length(tx->num_outputs) + sizeof(tx->locktime);
 
     if (flags & WALLY_TX_FLAG_ZEC_V4)
-        n += sizeof(uint32_t) + /* nVersionGroupId */
-             sizeof(uint32_t) + /* nExpiryHeight */
-             sizeof(uint64_t) + /* valueBalanceSapling (always 0) */
-             3;                 /* nShieldedSpend + nShieldedOutput + nJoinSplit (3x varint 0) */
+        n += zec_v4_extra_length();
 
     if (is_elements)
         n += sizeof(uint8_t); /* witness flag */
@@ -1968,7 +1966,7 @@ int wally_tx_get_hash_prevouts(const struct wally_tx *tx,
     if (tx && num_inputs == 0xffffffff) {
         if (index)
             return WALLY_EINVAL; /* 0xffffffff is only valid with index == 0 */
-       num_inputs = tx->num_inputs;
+        num_inputs = tx->num_inputs;
     }
     if (!tx || index >= tx->num_inputs || !num_inputs ||
         num_inputs > tx->num_inputs || index + num_inputs > tx->num_inputs ||
@@ -2035,7 +2033,7 @@ static int tx_to_bytes(const struct wally_tx *tx,
 
     p += uint32_to_le_bytes(tx->version, p);
     if (flags & WALLY_TX_FLAG_ZEC_V4) {
-        p += uint32_to_le_bytes(tx->version_group_id, p);
+        p = zec_v4_write_header(p, tx);
     } else if (is_elements) {
         *p++ = flags & WALLY_TX_FLAG_USE_WITNESS ? 1 : 0;
     } else {
@@ -2106,11 +2104,8 @@ static int tx_to_bytes(const struct wally_tx *tx,
 
     p += uint32_to_le_bytes(tx->locktime, p);
 
-    if (flags & WALLY_TX_FLAG_ZEC_V4) {
-        p += uint32_to_le_bytes(tx->expiry_height, p);
-        memset(p, 0, sizeof(uint64_t) + 3); // valueBalanceSapling(8) + 3 shielded zero-varints
-        p += sizeof(uint64_t) + 3;
-    }
+    if (flags & WALLY_TX_FLAG_ZEC_V4)
+        p = zec_v4_write_trailer(p, tx);
 
 #ifdef BUILD_ELEMENTS
     if (is_elements && (flags & WALLY_TX_FLAG_USE_WITNESS)) {
@@ -2362,17 +2357,9 @@ static int analyze_tx(const unsigned char *bytes, size_t bytes_len,
     ensure_n(sizeof(uint32_t)); /* Locktime */
 
     if (is_zec_v4) {
-        /* Locktime(4) + expiryHeight(4) + valueBalanceSapling(8) + 3 shielded-count varints */
-        ensure_n(4 + 4 + 8 + 3);
-        /* valueBalanceSapling bytes 8..15 relative to p must all be 0 */
-        {
-            size_t zv4_k;
-            for (zv4_k = 8; zv4_k < 16; ++zv4_k)
-                if (p[zv4_k]) return WALLY_EINVAL;
-        }
-        // drop this check in case of shieleded transactions support
-        if (p[16] || p[17] || p[18]) /* shielded counts must be 0 */
-            return WALLY_EINVAL;
+        int zret = zec_v4_validate_trailer(p, (size_t)(end - p));
+        if (zret != WALLY_OK)
+            return zret;
     } else if (*expect_witnesses && is_elements) {
         p += sizeof(uint32_t);
         for (i = 0; i < *num_inputs; ++i) {
@@ -2462,7 +2449,7 @@ static int tx_from_bytes(const unsigned char *bytes, size_t bytes_len,
 
     p += uint32_from_le_bytes(p, &(*output)->version);
     if (flags & WALLY_TX_FLAG_ZEC_V4) {
-        p += uint32_from_le_bytes(p, &(*output)->version_group_id);
+        p = (unsigned char *)zec_v4_read_header(p, *output);
     } else if (is_elements)
         p++; /* Skip witness flag */
     else if (expect_witnesses)
@@ -2553,12 +2540,8 @@ static int tx_from_bytes(const unsigned char *bytes, size_t bytes_len,
 
     uint32_from_le_bytes(p, &(*output)->locktime);
 
-    if (flags & WALLY_TX_FLAG_ZEC_V4) {
-        p += sizeof(uint32_t); /* advance past locktime */
-        p += uint32_from_le_bytes(p, &(*output)->expiry_height);
-        p += sizeof(uint64_t) + 3; /* skip valueBalanceSapling(8) + 3 shielded zero-varints */
-        (void)p;
-    }
+    if (flags & WALLY_TX_FLAG_ZEC_V4)
+        p = (unsigned char *)zec_v4_read_trailer(p, *output);
 
 #ifdef BUILD_ELEMENTS
 

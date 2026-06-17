@@ -48,6 +48,7 @@ libwallylite_la_SOURCES = \
     tx_io.c \
     wif.c \
     wordlist.c \
+    zcash.c \
     ccan/ccan/base64/base64.c \
     ccan/ccan/crypto/ripemd160/ripemd160.c \
     ccan/ccan/crypto/sha256/sha256.c \
@@ -64,7 +65,8 @@ libwallylite_la_INCLUDES = \
     include/wally_psbt.h \
     include/wally_script.h \
     include/wally_symmetric.h \
-    include/wally_transaction.h
+    include/wally_transaction.h \
+    include/wally_zcash.h
 
 libwallylite_la_LDFLAGS = -no-undefined
 

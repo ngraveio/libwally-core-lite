@@ -149,14 +149,16 @@ struct wally_tx_output {
 struct wally_tx {
     uint32_t version;
     uint32_t locktime;
-    uint32_t version_group_id; /* Zcash V4: nVersionGroupId (0x892F2085), else 0 */
-    uint32_t expiry_height;    /* Zcash V4: nExpiryHeight, else 0 */
     struct wally_tx_input *inputs;
     size_t num_inputs;
     size_t inputs_allocation_len;
     struct wally_tx_output *outputs;
     size_t num_outputs;
     size_t outputs_allocation_len;
+#ifdef WALLY_ZCASH
+    uint32_t version_group_id; /* NGRAVE-ZEC: nVersionGroupId, else 0 */
+    uint32_t expiry_height;    /* NGRAVE-ZEC: nExpiryHeight, else 0 */
+#endif
 };
 #endif /* SWIG */
 

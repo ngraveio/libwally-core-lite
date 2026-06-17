@@ -139,13 +139,15 @@ struct wally_psbt {
     uint32_t fallback_locktime;
     uint32_t has_fallback_locktime;
     uint32_t tx_modifiable_flags;
-    uint32_t branch_id;
 #ifndef WALLY_ABI_NO_ELEMENTS
     struct wally_map global_scalars;
     uint32_t pset_modifiable_flags;
     unsigned char genesis_blockhash[SHA256_LEN]; /* All zeros if not present */
 #endif /* WALLY_ABI_NO_ELEMENTS */
     struct wally_map *signing_cache;
+#ifdef WALLY_ZCASH
+    uint32_t branch_id;        /* NGRAVE-ZEC: CONSENSUS_BRANCH_ID */
+#endif
 };
 #endif /* SWIG */
 
