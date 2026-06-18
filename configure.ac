@@ -66,6 +66,9 @@ AC_ARG_ENABLE(tests,
 AC_ARG_ENABLE(elements,
     AS_HELP_STRING([--enable-elements],[enable elements tx code (default: no)]),
     [elements=$enableval], [elements=no])
+AC_ARG_ENABLE(zcash,
+    AS_HELP_STRING([--enable-zcash],[enable Zcash v4 transaction support (default: no)]),
+    [zcash=$enableval], [zcash=no])
 AC_ARG_ENABLE(builtin-memset,
     AS_HELP_STRING([--enable-builtin-memset],[disable to add -fno-builtin-memset to compiler flags. helps with explicit_bzero/memset being elided on Linux clang 7.0.1 and up (default: yes)]),
     [builtin_memset=$enableval], [builtin_memset=yes])
@@ -124,6 +127,10 @@ fi
 
 if test "x$minimal" == "xyes"; then
     AX_CHECK_COMPILE_FLAG([-DBUILD_MINIMAL=1], [AM_CFLAGS="$AM_CFLAGS -DBUILD_MINIMAL=1"])
+fi
+
+if test "x$zcash" == "xyes"; then
+    AX_CHECK_COMPILE_FLAG([-DWALLY_ZCASH=1], [AM_CFLAGS="$AM_CFLAGS -DWALLY_ZCASH=1"])
 fi
 
 if test "x$builtin_memset" == "xno"; then

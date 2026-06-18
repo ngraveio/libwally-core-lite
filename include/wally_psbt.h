@@ -145,6 +145,9 @@ struct wally_psbt {
     unsigned char genesis_blockhash[SHA256_LEN]; /* All zeros if not present */
 #endif /* WALLY_ABI_NO_ELEMENTS */
     struct wally_map *signing_cache;
+#ifdef WALLY_ZCASH
+    uint32_t branch_id;        /* NGRAVE-ZEC: CONSENSUS_BRANCH_ID */
+#endif
 };
 #endif /* SWIG */
 
