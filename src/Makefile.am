@@ -75,6 +75,8 @@ check_PROGRAMS = test_zec_v6
 test_zec_v6_SOURCES = $(top_srcdir)/tests/zec_v6/test_zec_v6.c
 test_zec_v6_CFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/tests/zec_v6 $(AM_CFLAGS)
 test_zec_v6_LDADD = libwallylite.la $(LIBSECP256K1)
+# Static: the zec_* helpers it tests are not exported from the shared library
+test_zec_v6_LDFLAGS = -static
 TESTS = test_zec_v6
 
 libwallylite_la_CFLAGS = -I$(top_srcdir) -I$(srcdir)/ccan -I$(top_srcdir)/src/secp256k1/include -DWALLY_CORE_BUILD=1 $(AM_CFLAGS)
