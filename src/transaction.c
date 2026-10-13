@@ -3381,6 +3381,12 @@ int wally_tx_clone_alloc(const struct wally_tx *tx, uint32_t flags, struct wally
 
     ret = wally_tx_init_alloc(tx->version, tx->locktime, tx->num_inputs, tx->num_outputs, output);
 
+    /* NGRAVE-ZEC: without these the clone would serialize as a BTC tx */
+    if (ret == WALLY_OK) {
+        (*output)->version_group_id = tx->version_group_id;
+        (*output)->expiry_height = tx->expiry_height;
+    }
+
     for (i = 0; ret == WALLY_OK && i < tx->num_inputs; ++i) {
         struct wally_tx_input tmp;
         memcpy(&tmp, &tx->inputs[i], sizeof(tmp));
