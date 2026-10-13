@@ -28,6 +28,7 @@ extern "C" {
    Unless you have a good reason to do so you will most likely not need it */
 #define WALLY_TX_FLAG_PRE_BIP144    0x8 /* Encode/Decode using pre-BIP 144 serialization */
 #define WALLY_TX_FLAG_ZEC_V4        0x10 /* Encode/Decode as a Zcash V4 Sapling transaction */
+#define WALLY_TX_FLAG_ZEC_V6        0x20 /* Encode/Decode as a Zcash V6 (ZIP-229) transaction */
 
 #define WALLY_TX_FLAG_BLINDED_INITIAL_ISSUANCE 0x1
 
@@ -157,6 +158,7 @@ struct wally_tx {
     size_t outputs_allocation_len;
     uint32_t version_group_id; /* NGRAVE-ZEC: nVersionGroupId, else 0 */
     uint32_t expiry_height;    /* NGRAVE-ZEC: nExpiryHeight, else 0 */
+    uint32_t consensus_branch_id; /* NGRAVE-ZEC: nConsensusBranchId (V6 only), else 0 */
 };
 #endif /* SWIG */
 

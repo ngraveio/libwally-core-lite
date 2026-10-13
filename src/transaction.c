@@ -17,7 +17,7 @@
 #define WALLY_TX_ALL_FLAGS \
     (WALLY_TX_FLAG_USE_WITNESS | WALLY_TX_FLAG_USE_ELEMENTS | \
      WALLY_TX_FLAG_ALLOW_PARTIAL | WALLY_TX_FLAG_PRE_BIP144 | \
-     WALLY_TX_FLAG_ZEC_V4) /* NGRAVE-ZEC */
+     WALLY_TX_FLAG_ZEC_V4 | WALLY_TX_FLAG_ZEC_V6) /* NGRAVE-ZEC */
 
 /* We use the maximum DER sig length (plus a byte for the sighash) so that
  * we overestimate the size by a byte or two per tx sig. This allows using
@@ -1723,6 +1723,8 @@ static int tx_get_lengths(const struct wally_tx *tx,
 
     if (flags & WALLY_TX_FLAG_ZEC_V4)
         n += zec_v4_extra_length();
+    else if (flags & WALLY_TX_FLAG_ZEC_V6)
+        n += zec_v6_extra_length();
 
     if (is_elements)
         n += sizeof(uint8_t); /* witness flag */
@@ -2034,6 +2036,8 @@ static int tx_to_bytes(const struct wally_tx *tx,
     p += uint32_to_le_bytes(tx->version, p);
     if (flags & WALLY_TX_FLAG_ZEC_V4) {
         p = zec_v4_write_header(p, tx);
+    } else if (flags & WALLY_TX_FLAG_ZEC_V6) {
+        p = zec_v6_write_header(p, tx); /* includes the locktime */
     } else if (is_elements) {
         *p++ = flags & WALLY_TX_FLAG_USE_WITNESS ? 1 : 0;
     } else {
@@ -2102,7 +2106,10 @@ static int tx_to_bytes(const struct wally_tx *tx,
         }
     }
 
-    p += uint32_to_le_bytes(tx->locktime, p);
+    if (flags & WALLY_TX_FLAG_ZEC_V6)
+        p = zec_v6_write_trailer(p); /* locktime was written in the header */
+    else
+        p += uint32_to_le_bytes(tx->locktime, p);
 
     if (flags & WALLY_TX_FLAG_ZEC_V4)
         p = zec_v4_write_trailer(p, tx);
@@ -2230,6 +2237,7 @@ static int analyze_tx(const unsigned char *bytes, size_t bytes_len,
     struct wally_tx tmp_tx;
     const bool is_elements = flags & WALLY_TX_FLAG_USE_ELEMENTS;
     const bool is_zec_v4 = flags & WALLY_TX_FLAG_ZEC_V4;
+    const bool is_zec_v6 = flags & WALLY_TX_FLAG_ZEC_V6;
 
     if (num_inputs)
         *num_inputs = 0;
@@ -2250,6 +2258,12 @@ static int analyze_tx(const unsigned char *bytes, size_t bytes_len,
         if ((size_t)(end - p) < sizeof(uint32_t))
             return WALLY_EINVAL;
         p += sizeof(uint32_t);
+    } else if (is_zec_v6) {
+        /* ZEC V6: Skip nVersionGroupId, nConsensusBranchId, nLockTime and
+         * nExpiryHeight, no segwit */
+        if ((size_t)(end - p) < zec_v6_header_length())
+            return WALLY_EINVAL;
+        p += zec_v6_header_length();
     } else if (is_elements) {
         if (flags & WALLY_TX_FLAG_PRE_BIP144)
             return WALLY_EINVAL; /* No pre-BIP 144 serialization for elements */
@@ -2354,10 +2368,15 @@ static int analyze_tx(const unsigned char *bytes, size_t bytes_len,
         }
     }
 
-    ensure_n(sizeof(uint32_t)); /* Locktime */
+    ensure_n(sizeof(uint32_t)); /* Locktime, or the 4 ZEC V6 trailer counts */
 
     if (is_zec_v4) {
         int zret = zec_v4_validate_trailer(p, (size_t)(end - p));
+        if (zret != WALLY_OK)
+            return zret;
+    } else if (is_zec_v6) {
+        /* Locktime was in the header; only the zero shielded counts remain */
+        int zret = zec_v6_validate_trailer(p, (size_t)(end - p));
         if (zret != WALLY_OK)
             return zret;
     } else if (*expect_witnesses && is_elements) {
@@ -2450,6 +2469,8 @@ static int tx_from_bytes(const unsigned char *bytes, size_t bytes_len,
     p += uint32_from_le_bytes(p, &(*output)->version);
     if (flags & WALLY_TX_FLAG_ZEC_V4) {
         p = (unsigned char *)zec_v4_read_header(p, *output);
+    } else if (flags & WALLY_TX_FLAG_ZEC_V6) {
+        p = (unsigned char *)zec_v6_read_header(p, *output); /* includes the locktime */
     } else if (is_elements)
         p++; /* Skip witness flag */
     else if (expect_witnesses)
@@ -2538,7 +2559,10 @@ static int tx_from_bytes(const unsigned char *bytes, size_t bytes_len,
         }
     }
 
-    uint32_from_le_bytes(p, &(*output)->locktime);
+    /* ZEC V6: the locktime was read from the header and the trailer holds only
+     * the zero shielded counts already checked by analyze_tx */
+    if (!(flags & WALLY_TX_FLAG_ZEC_V6))
+        uint32_from_le_bytes(p, &(*output)->locktime);
 
     if (flags & WALLY_TX_FLAG_ZEC_V4)
         p = (unsigned char *)zec_v4_read_trailer(p, *output);
@@ -3385,6 +3409,7 @@ int wally_tx_clone_alloc(const struct wally_tx *tx, uint32_t flags, struct wally
     if (ret == WALLY_OK) {
         (*output)->version_group_id = tx->version_group_id;
         (*output)->expiry_height = tx->expiry_height;
+        (*output)->consensus_branch_id = tx->consensus_branch_id;
     }
 
     for (i = 0; ret == WALLY_OK && i < tx->num_inputs; ++i) {

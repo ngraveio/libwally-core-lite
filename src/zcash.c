@@ -4,6 +4,7 @@
 #include <include/wally_transaction.h>
 #include <include/wally_psbt.h>
 #include <include/wally_map.h>
+#include <include/wally_zcash.h>
 
 #include <stdbool.h>
 #include <string.h>
@@ -80,6 +81,75 @@ const unsigned char *zec_v4_read_trailer(const unsigned char *p, struct wally_tx
     p += sizeof(uint32_t);                       /* advance past locktime          */
     p += uint32_from_le_bytes(p, &tx->expiry_height);
     p += ZEC_V4_TRAILER_ZEROS;                   /* skip valueBalance + 3 varints  */
+    return p;
+}
+
+/* ZEC V6 (ZIP-229) constants */
+static const uint8_t ZEC_V6_HEADER[] = {0x06, 0x00, 0x00, 0x80}; /* 0x80000006 LE */
+#define ZEC_V6_HEADER_LEN (sizeof(ZEC_V6_HEADER))
+
+/* After the version: nVersionGroupId + nConsensusBranchId + nLockTime + nExpiryHeight. */
+#define ZEC_V6_HEADER_FIELDS_LEN (4 * sizeof(uint32_t))
+
+/* Trailer = nSpendsSapling + nOutputsSapling + nActionsOrchard + nActionsIronwood (all 0). */
+#define ZEC_V6_TRAILER_ZEROS 4
+
+size_t zec_v6_extra_length(void)
+{
+    /* nVersionGroupId + nConsensusBranchId + nExpiryHeight + 4 zero-varints */
+    return 3 * sizeof(uint32_t) + ZEC_V6_TRAILER_ZEROS;
+}
+
+size_t zec_v6_header_length(void)
+{
+    return ZEC_V6_HEADER_FIELDS_LEN;
+}
+
+unsigned char *zec_v6_write_header(unsigned char *p, const struct wally_tx *tx)
+{
+    /* Written immediately after the 4-byte version. */
+    p += uint32_to_le_bytes(tx->version_group_id, p);
+    p += uint32_to_le_bytes(tx->consensus_branch_id, p);
+    p += uint32_to_le_bytes(tx->locktime, p);
+    p += uint32_to_le_bytes(tx->expiry_height, p);
+    return p;
+}
+
+unsigned char *zec_v6_write_trailer(unsigned char *p)
+{
+    /* Written immediately after the last output. */
+    memset(p, 0, ZEC_V6_TRAILER_ZEROS);
+    return p + ZEC_V6_TRAILER_ZEROS;
+}
+
+bool zec_v6_detect_header(const unsigned char *bytes, size_t len)
+{
+    uint32_t version_group_id;
+
+    /* The version and the group ID are only valid as a pair. */
+    if (len < ZEC_V6_HEADER_LEN + sizeof(uint32_t) ||
+        memcmp(bytes, ZEC_V6_HEADER, ZEC_V6_HEADER_LEN))
+        return false;
+    uint32_from_le_bytes(bytes + ZEC_V6_HEADER_LEN, &version_group_id);
+    return version_group_id == ZEC_V6_VERSION_GROUP_ID;
+}
+
+int zec_v6_validate_trailer(const unsigned char *p, size_t avail)
+{
+    /* Exactly 4 zero counts: any shielded data or trailing bytes are rejected.
+     * Drop this check when/if shielded transactions are supported. */
+    if (avail != ZEC_V6_TRAILER_ZEROS || p[0] || p[1] || p[2] || p[3])
+        return WALLY_EINVAL;
+    return WALLY_OK;
+}
+
+const unsigned char *zec_v6_read_header(const unsigned char *p, struct wally_tx *tx)
+{
+    /* Read immediately after the 4-byte version. */
+    p += uint32_from_le_bytes(p, &tx->version_group_id);
+    p += uint32_from_le_bytes(p, &tx->consensus_branch_id);
+    p += uint32_from_le_bytes(p, &tx->locktime);
+    p += uint32_from_le_bytes(p, &tx->expiry_height);
     return p;
 }
 
