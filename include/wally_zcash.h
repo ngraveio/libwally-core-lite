@@ -48,8 +48,9 @@ size_t zec_v6_header_length(void);                                 /* bytes afte
 int  zec_v6_validate_trailer(const unsigned char *p, size_t avail); /* p after outputs; WALLY_OK/EINVAL */
 const unsigned char *zec_v6_read_header(const unsigned char *p, struct wally_tx *tx); /* after version */
 
-/* PSBT: pull Zcash CONSENSUS_BRANCH_ID out of the proprietary key (BitGo convention).
- * Sets psbt->branch_id (0 when absent). Always WALLY_OK. */
+/* PSBT: set psbt->branch_id. For V6 it comes from the tx itself; a BitGo proprietary
+ * branch key, if also present, must match (else WALLY_EINVAL). For V4 it comes from
+ * the proprietary key (0 when absent). */
 int zec_psbt_extract_branch_id(struct wally_psbt *psbt);
 
 #ifdef __cplusplus

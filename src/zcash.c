@@ -156,6 +156,8 @@ const unsigned char *zec_v6_read_header(const unsigned char *p, struct wally_tx 
 int zec_psbt_extract_branch_id(struct wally_psbt *psbt)
 {
     size_t i;
+    bool found = false;
+    uint32_t prop_branch_id = 0;
 
     psbt->branch_id = 0;
     for (i = 0; i < psbt->unknowns.num_items; ++i) {
@@ -163,9 +165,19 @@ int zec_psbt_extract_branch_id(struct wally_psbt *psbt)
         if (item->key_len == ZEC_PROP_KEY_BRANCH_ID_LEN &&
             !memcmp(item->key, ZEC_PROP_KEY_BRANCH_ID, ZEC_PROP_KEY_BRANCH_ID_LEN) &&
             item->value_len == sizeof(uint32_t)) {
-            uint32_from_le_bytes(item->value, &psbt->branch_id); /* alignment-safe */
+            uint32_from_le_bytes(item->value, &prop_branch_id); /* alignment-safe */
+            found = true;
             break;
         }
+    }
+
+    if (psbt->tx && psbt->tx->version_group_id == ZEC_V6_VERSION_GROUP_ID) {
+        /* V6 commits to its branch ID in the tx; a conflicting key is an error. */
+        if (found && prop_branch_id != psbt->tx->consensus_branch_id)
+            return WALLY_EINVAL;
+        psbt->branch_id = psbt->tx->consensus_branch_id;
+    } else if (found) {
+        psbt->branch_id = prop_branch_id;
     }
     return WALLY_OK;
 }
