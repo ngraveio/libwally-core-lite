@@ -16,8 +16,8 @@
 
 #define WALLY_TX_ALL_FLAGS \
     (WALLY_TX_FLAG_USE_WITNESS | WALLY_TX_FLAG_USE_ELEMENTS | \
-     WALLY_TX_FLAG_ALLOW_PARTIAL | WALLY_TX_FLAG_PRE_BIP144 \
-     ZEC_TX_FLAG) /* NGRAVE-ZEC: "| WALLY_TX_FLAG_ZEC_V4" under WALLY_ZCASH, else empty */
+     WALLY_TX_FLAG_ALLOW_PARTIAL | WALLY_TX_FLAG_PRE_BIP144 | \
+     WALLY_TX_FLAG_ZEC_V4) /* NGRAVE-ZEC */
 
 /* We use the maximum DER sig length (plus a byte for the sighash) so that
  * we overestimate the size by a byte or two per tx sig. This allows using

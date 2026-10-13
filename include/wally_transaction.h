@@ -155,10 +155,8 @@ struct wally_tx {
     struct wally_tx_output *outputs;
     size_t num_outputs;
     size_t outputs_allocation_len;
-#ifdef WALLY_ZCASH
     uint32_t version_group_id; /* NGRAVE-ZEC: nVersionGroupId, else 0 */
     uint32_t expiry_height;    /* NGRAVE-ZEC: nExpiryHeight, else 0 */
-#endif
 };
 #endif /* SWIG */
 

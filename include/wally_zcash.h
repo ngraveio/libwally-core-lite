@@ -3,13 +3,7 @@
 
 #include "wally_core.h"
 
-/* NGRAVE-ZEC: ZEC_TX_FLAG expands to "| WALLY_TX_FLAG_ZEC_V4" when
- * WALLY_ZCASH is defined (--enable-zcash / -DWALLY_ZCASH), else empty. */
-#ifdef WALLY_ZCASH
-#define ZEC_TX_FLAG | WALLY_TX_FLAG_ZEC_V4
-#else
-#define ZEC_TX_FLAG
-#endif
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {

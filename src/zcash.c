@@ -8,10 +8,6 @@
 #include <stdbool.h>
 #include <string.h>
 
-/* The whole feature compiles in only when WALLY_ZCASH is defined; otherwise this
- * is an empty translation unit so non-ZEC builds are byte-for-byte unaffected. */
-#ifdef WALLY_ZCASH
-
 /* ZEC V4 (Sapling) constants */
 static const uint8_t  ZEC_V4_HEADER[] = {0x04, 0x00, 0x00, 0x80}; /* 0x80000004 LE */
 #define ZEC_V4_HEADER_LEN (sizeof(ZEC_V4_HEADER))
@@ -103,5 +99,3 @@ int zec_psbt_extract_branch_id(struct wally_psbt *psbt)
     }
     return WALLY_OK;
 }
-
-#endif /* WALLY_ZCASH */
