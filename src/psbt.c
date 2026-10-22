@@ -2097,9 +2097,11 @@ static int pull_tx(const unsigned char **cursor, size_t *max,
     if (*tx_out)
         return WALLY_EINVAL; /* Duplicate */
     pull_subfield_start(cursor, max, pull_varint(cursor, max), &val, &val_len);
-    /* Auto-detect ZEC V4 */
+    /* Auto-detect ZEC V4 / V6 */
     if (zec_v4_detect_header(val, val_len))
         tx_flags |= WALLY_TX_FLAG_ZEC_V4;
+    else if (zec_v6_detect_header(val, val_len))
+        tx_flags |= WALLY_TX_FLAG_ZEC_V6;
     ret = wally_tx_from_bytes(val, val_len, tx_flags, tx_out);
     pull_subfield_end(cursor, max, val, val_len);
     return ret;
@@ -2892,9 +2894,11 @@ static int push_length_and_tx(unsigned char **cursor, size_t *max,
     size_t tx_len;
     unsigned char *p;
 
-    /* Auto-detect ZEC V4 for serialization */
+    /* Auto-detect ZEC V4 / V6 for serialization */
     if (tx && tx->version_group_id == ZEC_V4_VERSION_GROUP_ID)
         flags |= WALLY_TX_FLAG_ZEC_V4;
+    else if (tx && tx->version_group_id == ZEC_V6_VERSION_GROUP_ID)
+        flags |= WALLY_TX_FLAG_ZEC_V6;
 
     if ((ret = wally_tx_get_length(tx, flags, &tx_len)) != WALLY_OK)
         return ret;
